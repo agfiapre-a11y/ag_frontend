@@ -1,9 +1,12 @@
 [build]
-  command = "flutter build web --dart-define=API_BASE_URL=${API_BASE_URL} --dart-define=SUPABASE_URL=${SUPABASE_URL} --dart-define=SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY} --base-href \"/\""
+  command = """
+    git clone --depth 1 --branch stable https://github.com/flutter/flutter.git /opt/flutter &&
+    export PATH="/opt/flutter/bin:$PATH" &&
+    flutter --version &&
+    flutter pub get &&
+    flutter build web --dart-define=API_BASE_URL=${API_BASE_URL} --dart-define=SUPABASE_URL=${SUPABASE_URL} --dart-define=SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY} --base-href "/"
+  """
   publish = "build/web"
-
-[build.environment]
-  FLUTTER_VERSION = "stable"
 
 [[redirects]]
   from = "/*"
