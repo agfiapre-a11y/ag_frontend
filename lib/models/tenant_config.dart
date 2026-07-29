@@ -57,7 +57,7 @@ class TenantConfig {
 
   factory TenantConfig.fromJson(Map<String, dynamic> json) {
     return TenantConfig(
-      id: json['id'] as String,
+      id: json['id'] as String? ?? json['slug'] as String? ?? 'unknown',
       name: json['name'] as String,
       slug: json['slug'] as String,
       address: json['address'] as String?,

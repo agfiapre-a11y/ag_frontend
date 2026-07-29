@@ -88,9 +88,11 @@ class _RouterNotifier extends ChangeNotifier {
       case AppInitState.loading:
         return loc == '/' ? null : '/';
       case AppInitState.needsSetup:
-        return (loc == '/login' || loc == '/setup' || loc == '/landing') ? null : '/login';
+        if (loc == '/login' || loc == '/setup' || loc == '/landing') return null;
+        return '/landing';
       case AppInitState.unauthenticated:
-        return (loc == '/login' || loc == '/landing') ? null : '/login';
+        if (loc == '/login' || loc == '/landing') return null;
+        return '/landing';
       case AppInitState.authenticated:
         if (loc == '/' || loc == '/login' || loc == '/setup' || loc == '/landing') {
           return '/home';
