@@ -96,6 +96,31 @@ class ApiClient {
 
   Future<Map<String, dynamic>> get(String path) => request('GET', path);
 
+  Future<List<dynamic>> getList(String path) async {
+    if (!ApiConfig.isConfigured) {
+      throw StateError('API_BASE_URL is not configured');
+    }
+    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+    if (_token != null) {
+      headers['Authorization'] = 'Bearer $_token';
+    }
+    if (_tenantId != null) {
+      headers['X-Tenant-Id'] = _tenantId!;
+    }
+    final response = await http.get(uri, headers: headers);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.isEmpty) return [];
+      final decoded = jsonDecode(response.body);
+      if (decoded is List) return decoded;
+      if (decoded is Map<String, dynamic>) return [decoded];
+      return [];
+    }
+    throw ApiException(response.statusCode, _parseError(response));
+  }
+
   Future<Map<String, dynamic>> post(String path, Map<String, dynamic>? body) =>
       request('POST', path, body: body);
 

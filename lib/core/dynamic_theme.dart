@@ -10,9 +10,11 @@ class DynamicTheme {
     if (config == null) return base;
 
     final primary = _parseColor(config.primaryColor, const Color(0xFF2E7D32));
+    final secondary = _parseColor(config.secondaryColor, const Color(0xFFFFD600));
     final colorScheme = ColorScheme.fromSeed(
       seedColor: primary,
       brightness: Brightness.light,
+      secondary: secondary,
     );
 
     return base.copyWith(
@@ -58,6 +60,14 @@ class DynamicTheme {
         prefixIconColor: primary,
         floatingLabelStyle: TextStyle(color: primary),
       ),
+      chipTheme: base.chipTheme.copyWith(
+        selectedColor: primary,
+        labelStyle: TextStyle(color: primary),
+      ),
+      progressIndicatorTheme: base.progressIndicatorTheme.copyWith(
+        color: primary,
+        linearTrackColor: secondary.withValues(alpha: 0.3),
+      ),
     );
   }
 
@@ -65,6 +75,13 @@ class DynamicTheme {
     return _parseColor(
       config?.primaryColor,
       const Color(0xFF2E7D32),
+    );
+  }
+
+  static Color secondaryColor(TenantConfig? config) {
+    return _parseColor(
+      config?.secondaryColor,
+      const Color(0xFFFFD600),
     );
   }
 

@@ -1129,6 +1129,10 @@ class _SuperSystemAdminHome extends ConsumerWidget {
                   childAspectRatio: Responsive.isMobile(context) ? 1.2 : 2.5,
                   children: [
                     _QuickActionTile(
+                        icon: Icons.church,
+                        label: 'Churches',
+                        onTap: () => context.push('/super-admin/churches')),
+                    _QuickActionTile(
                         icon: Icons.manage_accounts,
                         label: 'Users',
                         onTap: () => context.push('/users')),

@@ -218,6 +218,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           const SizedBox(height: 16),
           Center(
             child: TextButton(
+              onPressed: () => context.go('/landing'),
+              child: Text(
+                'Explore Assemblies of God, Ghana',
+                style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: AppColors.textSecondary.withValues(alpha: 0.7),
+                    decoration: TextDecoration.underline),
+              ),
+            ),
+          ),
+          Center(
+            child: TextButton(
               onPressed: () => PrivacyNoticeDialog.show(context),
               child: Text(
                 'Privacy Notice',

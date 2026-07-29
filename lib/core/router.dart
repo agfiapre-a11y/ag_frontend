@@ -6,7 +6,9 @@ import '../providers/auth_provider.dart';
 import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/setup_screen.dart';
+import '../screens/landing/landing_page.dart';
 import '../screens/home/home_screen.dart';
+import '../screens/super_admin/super_admin_dashboard.dart';
 import '../screens/members/members_screen.dart';
 import '../screens/members/add_member_screen.dart';
 import '../screens/members/edit_member_screen.dart';
@@ -79,15 +81,18 @@ class _RouterNotifier extends ChangeNotifier {
     final appState = _ref.read(appStateProvider);
     final loc = state.matchedLocation;
 
+    // Landing page is always public
+    if (loc == '/landing') return null;
+
     switch (appState.initState) {
       case AppInitState.loading:
         return loc == '/' ? null : '/';
       case AppInitState.needsSetup:
-        return (loc == '/login' || loc == '/setup') ? null : '/login';
+        return (loc == '/login' || loc == '/setup' || loc == '/landing') ? null : '/login';
       case AppInitState.unauthenticated:
-        return loc == '/login' ? null : '/login';
+        return (loc == '/login' || loc == '/landing') ? null : '/login';
       case AppInitState.authenticated:
-        if (loc == '/' || loc == '/login' || loc == '/setup') {
+        if (loc == '/' || loc == '/login' || loc == '/setup' || loc == '/landing') {
           return '/home';
         }
         return null;
@@ -105,9 +110,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/setup', builder: (_, _) => const SetupScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/landing', builder: (_, _) => const LandingPage()),
       GoRoute(
         path: '/home',
         builder: (_, _) => const DashboardThemeWrapper(child: HomeScreen()),
+      ),
+      GoRoute(
+        path: '/super-admin/churches',
+        builder: (_, _) => const DashboardThemeWrapper(child: SuperAdminDashboard()),
       ),
       GoRoute(
         path: '/members',

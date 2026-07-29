@@ -70,6 +70,10 @@ class AppDrawer extends ConsumerWidget {
                 // ── Super System Administrator ───────────────────────────
                 if (role == AppRoles.superSystemAdmin) ...[
                   _EmeraldNavItem(
+                      icon: Icons.church_outlined,
+                      label: 'Churches',
+                      route: '/super-admin/churches'),
+                  _EmeraldNavItem(
                       icon: Icons.business_outlined,
                       label: 'Organizations',
                       route: '/organizations'),
