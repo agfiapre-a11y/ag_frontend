@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Paradise AG Church Management App.">
+  <meta name="theme-color" content="#0F2E27">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Paradise AG">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Paradise AG</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <div id="loading" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#0F2E27;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;">
+    <div style="width:60px;height:60px;border:3px solid rgba(255,255,255,0.2);border-top:3px solid #D4AF37;border-radius:50%;animation:spin 1s linear infinite;"></div>
+    <p style="color:#D4AF37;margin-top:20px;font-family:sans-serif;font-size:16px;">Loading Paradise AG...</p>
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    window.addEventListener('flutter-first-frame', function() {
+      var l = document.getElementById('loading');
+      if (l) l.style.display = 'none';
+    });
+    // Fallback: hide loading after 30s even if event doesn't fire
+    setTimeout(function() {
+      var l = document.getElementById('loading');
+      if (l) l.style.display = 'none';
+    }, 30000);
+  </script>
+</body>
+</html>

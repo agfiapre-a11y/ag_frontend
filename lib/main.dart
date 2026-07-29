@@ -1,0 +1,110 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/router.dart';
+import 'core/dynamic_theme.dart';
+import 'core/web_url_strategy_stub.dart'
+    if (dart.library.html) 'core/web_url_strategy.dart' as web_url;
+import 'services/local_db.dart';
+import 'services/supabase_config.dart';
+import 'services/seed_data_service.dart';
+import 'services/seed_role_users.dart';
+import 'services/seed_multi_church.dart';
+import 'services/tenant_context.dart';
+import 'providers/tenant_provider.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Surface errors visually instead of showing blank screen
+  FlutterError.onError = (details) {
+    debugPrint('FLUTTER ERROR: ${details.exception}\n${details.stack}');
+  };
+  ErrorWidget.builder = (details) {
+    return Material(
+      child: Container(
+        color: const Color(0xFF0F2E27),
+        padding: const EdgeInsets.all(32),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
+              const Text('Initialization Error',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('${details.exception}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
+
+  // Set web base URL for PWA support (web only)
+  web_url.configureWebUrlStrategy();
+
+  try {
+    await LocalDb.init();
+    await SupabaseConfig.initialize();
+
+    final hasSeeded = LocalDb.prefs.getBool('has_seeded') ?? false;
+
+    if (!hasSeeded) {
+      try {
+        final churches = LocalDb.getAllChurches();
+        if (churches.isEmpty) {
+          await SeedMultiChurch.seedAllChurches();
+        }
+
+        final allChurches = LocalDb.getAllChurches();
+        if (allChurches.isNotEmpty) {
+          await LocalDb.setActiveChurch(allChurches.first.id);
+          TenantContext.setActiveChurch(allChurches.first.id);
+          await SeedDataService.seedTrainingData(allChurches.first.id);
+
+          for (final church in allChurches) {
+            await LocalDb.setActiveChurch(church.id);
+            TenantContext.setActiveChurch(church.id);
+            await SeedRoleUsers.seedAllRoleUsers(
+                church.id, churchEmail: church.email);
+          }
+
+          await LocalDb.setActiveChurch(allChurches.first.id);
+          TenantContext.setActiveChurch(allChurches.first.id);
+          await SeedRoleUsers.seedAboveChurchRoleUsers();
+        }
+
+        await LocalDb.prefs.setBool('has_seeded', true);
+      } catch (e, st) {
+        debugPrint('SEED ERROR: $e\n$st');
+      }
+    }
+
+    await LocalDb.clearSession();
+  } catch (e, st) {
+    debugPrint('INIT ERROR: $e\n$st');
+  }
+
+  runApp(const ProviderScope(child: ParadiseAGApp()));
+}
+
+class ParadiseAGApp extends ConsumerWidget {
+  const ParadiseAGApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+    final tenantConfig = ref.watch(tenantConfigProvider);
+    final appTitle = tenantConfig?.appName ?? tenantConfig?.name ?? 'Paradise AG';
+
+    return MaterialApp.router(
+      title: appTitle,
+      theme: DynamicTheme.fromConfig(tenantConfig),
+      routerConfig: router,
+      debugShowCheckedModeBanner: false,
+    );
+  }
+}

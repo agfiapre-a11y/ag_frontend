@@ -1,0 +1,2052 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import '../models/app_user.dart';
+import '../models/attendance_record.dart';
+import '../models/branch.dart';
+import '../models/department.dart';
+import '../models/member.dart';
+import '../models/event.dart';
+import '../models/sermon.dart';
+import '../models/transaction.dart';
+import '../models/organization.dart';
+import '../models/region.dart';
+import '../models/district.dart';
+import '../models/area.dart';
+import '../models/welfare_case.dart';
+import '../models/welfare_finance.dart';
+import '../models/welfare_statement.dart';
+import '../models/ministry.dart';
+import '../models/ministry_finance.dart';
+import '../models/contribution.dart';
+import '../models/budget.dart';
+import '../models/finance_approval.dart';
+import '../models/app_notification.dart';
+import '../core/constants.dart';
+import '../services/local_db.dart';
+import '../services/movement_classifier.dart';
+import 'auth_provider.dart';
+
+const _uuid = Uuid();
+
+/// Uses the canonical AppRoles.isAboveChurchLevel to determine if a role
+/// has cross-church data access (superSystemAdmin, nationalAdmin, etc.)
+bool _isCrossChurchRole(String? role) => AppRoles.isAboveChurchLevel(role);
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+
+class UserNotifier extends StateNotifier<List<AppUser>> {
+  final String churchId;
+  final bool crossChurch;
+
+  UserNotifier(this.churchId, {this.crossChurch = false}) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    final all = crossChurch
+        ? LocalDb.getAllUsersAcrossChurches()
+        : LocalDb.getAllUsers().where((u) => u.churchId == churchId).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+    state = all;
+  }
+
+  Future<void> update(AppUser user) async {
+    await LocalDb.saveUser(user);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteUser(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final userProvider =
+    StateNotifierProvider<UserNotifier, List<AppUser>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  return UserNotifier(churchId, crossChurch: _isCrossChurchRole(appState.user?.role));
+});
+
+// ── Branches ──────────────────────────────────────────────────────────────────
+
+class BranchNotifier extends StateNotifier<List<Branch>> {
+  final String churchId;
+  final String? organizationId;
+  final String? regionId;
+  final String? districtId;
+  final String? areaId;
+  final bool crossChurch;
+
+  BranchNotifier(
+    this.churchId, {
+    this.organizationId,
+    this.regionId,
+    this.districtId,
+    this.areaId,
+    this.crossChurch = false,
+  }) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    final list = crossChurch
+        ? LocalDb.getAllBranchesAcrossChurches()
+        : LocalDb.getAllBranches(
+            churchId: churchId,
+            organizationId: organizationId,
+            regionId: regionId,
+            districtId: districtId,
+            areaId: areaId,
+          );
+    list.sort((a, b) => a.name.compareTo(b.name));
+    state = list;
+  }
+
+  Future<void> add({
+    required String name,
+    required String location,
+    required String pastorId,
+  }) async {
+    final branch = Branch(
+      id: _uuid.v4(),
+      churchId: churchId,
+      name: name,
+      location: location,
+      pastorId: pastorId,
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveBranch(branch);
+    _load();
+  }
+
+  Future<void> update(Branch branch) async {
+    await LocalDb.saveBranch(branch);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteBranch(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final branchProvider =
+    StateNotifierProvider<BranchNotifier, List<Branch>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  String? organizationId, regionId, districtId, areaId;
+
+  // Apply hierarchical filtering based on user role
+  if (user?.role == AppRoles.nationalAdmin ||
+      user?.role == AppRoles.nationalExecutive) {
+    organizationId = user?.organizationId;
+  } else if (user?.role == AppRoles.regionalAdmin ||
+      user?.role == AppRoles.regionalBishop) {
+    organizationId = user?.organizationId;
+    regionId = user?.regionId;
+  } else if (user?.role == AppRoles.districtAdmin ||
+      user?.role == AppRoles.districtPastor) {
+    organizationId = user?.organizationId;
+    regionId = user?.regionId;
+    districtId = user?.districtId;
+  } else if (user?.role == AppRoles.areaAdmin ||
+      user?.role == AppRoles.localChurchAdmin ||
+      user?.role == AppRoles.seniorPastor ||
+      user?.role == AppRoles.associatePastor ||
+      user?.role == AppRoles.churchSecretary ||
+      user?.role == AppRoles.financeOfficer ||
+      user?.role == AppRoles.ministryHead ||
+      user?.role == AppRoles.cellLeader ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.member) {
+    organizationId = user?.organizationId;
+    regionId = user?.regionId;
+    districtId = user?.districtId;
+    areaId = user?.areaId;
+  }
+
+  return BranchNotifier(
+    churchId,
+    organizationId: organizationId,
+    regionId: regionId,
+    districtId: districtId,
+    areaId: areaId,
+    crossChurch: _isCrossChurchRole(user?.role),
+  );
+});
+
+// ── Departments ───────────────────────────────────────────────────────────────
+
+class DepartmentNotifier extends StateNotifier<List<Department>> {
+  final String churchId;
+  final String? branchFilter;
+  final bool crossChurch;
+
+  DepartmentNotifier(this.churchId, this.branchFilter, {this.crossChurch = false}) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllDepartmentsAcrossChurches()
+        : LocalDb.getAllDepartments(
+            churchId: churchId,
+            branchId: branchFilter,
+          );
+  }
+
+  Future<void> add({
+    required String branchId,
+    required String name,
+    required String description,
+  }) async {
+    final dept = Department(
+      id: _uuid.v4(),
+      churchId: churchId,
+      branchId: branchId,
+      name: name,
+      description: description,
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveDepartment(dept);
+    _load();
+  }
+
+  Future<void> update(Department dept) async {
+    await LocalDb.saveDepartment(dept);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteDepartment(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final departmentProvider =
+    StateNotifierProvider<DepartmentNotifier, List<Department>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  String? branchFilter;
+  if (user?.role == AppRoles.pastor && (user?.branchId.isNotEmpty ?? false)) {
+    branchFilter = user?.branchId;
+  } else if (user?.role == AppRoles.deptLeader &&
+      (user?.branchId.isNotEmpty ?? false)) {
+    branchFilter = user?.branchId;
+  }
+  return DepartmentNotifier(churchId, branchFilter,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Members ───────────────────────────────────────────────────────────────────
+
+class MemberNotifier extends StateNotifier<List<Member>> {
+  final String churchId;
+  final String? branchFilter;
+  final String? departmentFilter;
+  final String? organizationId;
+  final String? regionId;
+  final String? districtId;
+  final String? areaId;
+  final bool crossChurch;
+
+  MemberNotifier(
+    this.churchId, {
+    this.branchFilter,
+    this.departmentFilter,
+    this.organizationId,
+    this.regionId,
+    this.districtId,
+    this.areaId,
+    this.crossChurch = false,
+  }) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    final list = crossChurch
+        ? LocalDb.getAllMembersAcrossChurches(
+            branchId: branchFilter,
+            departmentId: departmentFilter,
+            organizationId: organizationId,
+            regionId: regionId,
+            districtId: districtId,
+            areaId: areaId,
+          )
+        : LocalDb.getAllMembers(
+            churchId: churchId,
+            branchId: branchFilter,
+            departmentId: departmentFilter,
+            organizationId: organizationId,
+            regionId: regionId,
+            districtId: districtId,
+            areaId: areaId,
+          );
+    list.sort((a, b) => a.name.compareTo(b.name));
+    state = list;
+  }
+
+  Future<void> add({
+    required String branchId,
+    required String name,
+    required String email,
+    required String phone,
+    required String address,
+    required String gender,
+    DateTime? dateOfBirth,
+    String maritalStatus = 'single',
+    bool isEmployed = false,
+    String departmentId = '',
+  }) async {
+    final movement = MovementClassifier.classify(
+      dateOfBirth: dateOfBirth,
+      gender: gender,
+      maritalStatus: maritalStatus,
+      isEmployed: isEmployed,
+    );
+    final member = Member(
+      id: _uuid.v4(),
+      churchId: churchId,
+      branchId: branchId,
+      departmentId: departmentId,
+      name: name,
+      email: email,
+      phone: phone,
+      address: address,
+      gender: gender,
+      dateOfBirth: dateOfBirth,
+      maritalStatus: maritalStatus,
+      isEmployed: isEmployed,
+      movement: movement,
+      membershipDate: DateTime.now(),
+      isActive: true,
+    );
+    await LocalDb.saveMember(member);
+    _load();
+  }
+
+  Future<void> update(Member member) async {
+    await LocalDb.saveMember(member);
+    _load();
+  }
+
+  Future<void> toggleActive(String id) async {
+    final member = LocalDb.getMemberById(id);
+    if (member == null) return;
+    await LocalDb.saveMember(member.copyWith(isActive: !member.isActive));
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteMember(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final memberProvider =
+    StateNotifierProvider<MemberNotifier, List<Member>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+
+  String? branchFilter;
+  String? deptFilter;
+  String? organizationId, regionId, districtId, areaId;
+
+  // Apply hierarchical filtering based on user role
+  if (user?.role == AppRoles.nationalAdmin ||
+      user?.role == AppRoles.nationalExecutive) {
+    organizationId = user?.organizationId;
+  } else if (user?.role == AppRoles.regionalAdmin ||
+      user?.role == AppRoles.regionalBishop) {
+    organizationId = user?.organizationId;
+    regionId = user?.regionId;
+  } else if (user?.role == AppRoles.districtAdmin ||
+      user?.role == AppRoles.districtPastor) {
+    organizationId = user?.organizationId;
+    regionId = user?.regionId;
+    districtId = user?.districtId;
+  } else if (user?.role == AppRoles.areaAdmin ||
+      user?.role == AppRoles.localChurchAdmin ||
+      user?.role == AppRoles.seniorPastor ||
+      user?.role == AppRoles.associatePastor ||
+      user?.role == AppRoles.churchSecretary ||
+      user?.role == AppRoles.financeOfficer ||
+      user?.role == AppRoles.ministryHead ||
+      user?.role == AppRoles.cellLeader ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.member) {
+    organizationId = user?.organizationId;
+    regionId = user?.regionId;
+    districtId = user?.districtId;
+    areaId = user?.areaId;
+    branchFilter = user?.branchId;
+    deptFilter = user?.departmentId;
+  }
+
+  return MemberNotifier(
+    churchId,
+    branchFilter: branchFilter,
+    departmentFilter: deptFilter,
+    organizationId: organizationId,
+    regionId: regionId,
+    districtId: districtId,
+    areaId: areaId,
+    crossChurch: _isCrossChurchRole(user?.role),
+  );
+});
+
+// ── Attendance ────────────────────────────────────────────────────────────────
+
+class AttendanceNotifier extends StateNotifier<List<AttendanceRecord>> {
+  final String churchId;
+  final String? branchFilter;
+  final bool crossChurch;
+  final String? ministryTypeFilter;
+
+  AttendanceNotifier(this.churchId, this.branchFilter,
+      {this.crossChurch = false, this.ministryTypeFilter}) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllAttendanceAcrossChurches()
+        : LocalDb.getAllAttendanceRecords(
+            churchId: churchId,
+            branchId: branchFilter,
+            ministryType: ministryTypeFilter,
+          );
+  }
+
+  Future<void> save(AttendanceRecord record) async {
+    await LocalDb.saveAttendanceRecord(record);
+    _load();
+  }
+
+  Future<void> update(AttendanceRecord record) async {
+    await LocalDb.saveAttendanceRecord(record);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteAttendanceRecord(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final attendanceProvider =
+    StateNotifierProvider<AttendanceNotifier, List<AttendanceRecord>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  // Local church level users see only their branch
+  final branchFilter =
+      (user?.role == AppRoles.localChurchAdmin ||
+              user?.role == AppRoles.seniorPastor ||
+              user?.role == AppRoles.associatePastor ||
+              user?.role == AppRoles.churchSecretary ||
+              user?.role == AppRoles.financeOfficer ||
+              user?.role == AppRoles.ministryHead ||
+              user?.role == AppRoles.youthMinistryHead ||
+              user?.role == AppRoles.menFellowshipHead ||
+              user?.role == AppRoles.womenFellowshipHead ||
+              user?.role == AppRoles.childrenMinistryHead ||
+              user?.role == AppRoles.cellLeader ||
+              user?.role == AppRoles.volunteer ||
+              user?.role == AppRoles.member) && (user?.branchId.isNotEmpty ?? false)
+          ? user?.branchId
+          : null;
+
+  // Ministry-specific heads see only their ministry attendance
+  String? ministryTypeFilter;
+  if (user?.role == AppRoles.youthMinistryHead) {
+    ministryTypeFilter = MinistryType.youth;
+  } else if (user?.role == AppRoles.menFellowshipHead) {
+    ministryTypeFilter = MinistryType.menFellowship;
+  } else if (user?.role == AppRoles.womenFellowshipHead) {
+    ministryTypeFilter = MinistryType.womenFellowship;
+  } else if (user?.role == AppRoles.childrenMinistryHead) {
+    ministryTypeFilter = MinistryType.children;
+  }
+
+  return AttendanceNotifier(churchId, branchFilter,
+      crossChurch: _isCrossChurchRole(user?.role),
+      ministryTypeFilter: ministryTypeFilter);
+});
+
+// ── Finance ───────────────────────────────────────────────────────────────────
+
+class FinanceNotifier extends StateNotifier<List<FinanceTransaction>> {
+  final String churchId;
+  final String? branchFilter;
+  final bool crossChurch;
+
+  FinanceNotifier(this.churchId, this.branchFilter, {this.crossChurch = false}) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllTransactionsAcrossChurches()
+        : LocalDb.getAllTransactions(
+            churchId: churchId,
+            branchId: branchFilter,
+          );
+  }
+
+  Future<void> add(FinanceTransaction tx) async {
+    await LocalDb.saveTransaction(tx);
+    _load();
+  }
+
+  Future<void> update(FinanceTransaction tx) async {
+    await LocalDb.saveTransaction(tx);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteTransaction(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final financeProvider =
+    StateNotifierProvider<FinanceNotifier, List<FinanceTransaction>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  // Local church level users see only their branch
+  final branchFilter =
+      (user?.role == AppRoles.localChurchAdmin ||
+              user?.role == AppRoles.seniorPastor ||
+              user?.role == AppRoles.associatePastor ||
+              user?.role == AppRoles.churchSecretary ||
+              user?.role == AppRoles.financeOfficer ||
+              user?.role == AppRoles.ministryHead ||
+              user?.role == AppRoles.cellLeader ||
+              user?.role == AppRoles.volunteer ||
+              user?.role == AppRoles.member) && (user?.branchId.isNotEmpty ?? false)
+          ? user?.branchId
+          : null;
+  return FinanceNotifier(churchId, branchFilter,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Sermons ───────────────────────────────────────────────────────────────────
+
+class SermonNotifier extends StateNotifier<List<Sermon>> {
+  final String churchId;
+  final String? branchFilter;
+  final bool crossChurch;
+
+  SermonNotifier(this.churchId, this.branchFilter, {this.crossChurch = false}) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllSermonsAcrossChurches()
+        : LocalDb.getAllSermons(
+            churchId: churchId,
+            branchId: branchFilter,
+          );
+  }
+
+  Future<void> save(Sermon sermon) async {
+    await LocalDb.saveSermon(sermon);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteSermon(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final sermonProvider =
+    StateNotifierProvider<SermonNotifier, List<Sermon>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  // Local church level users see only their branch
+  final branchFilter =
+      (user?.role == AppRoles.localChurchAdmin ||
+              user?.role == AppRoles.seniorPastor ||
+              user?.role == AppRoles.associatePastor ||
+              user?.role == AppRoles.churchSecretary ||
+              user?.role == AppRoles.financeOfficer ||
+              user?.role == AppRoles.ministryHead ||
+              user?.role == AppRoles.cellLeader ||
+              user?.role == AppRoles.volunteer ||
+              user?.role == AppRoles.member) && (user?.branchId.isNotEmpty ?? false)
+          ? user?.branchId
+          : null;
+  return SermonNotifier(churchId, branchFilter,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Events ────────────────────────────────────────────────────────────────────
+
+class EventNotifier extends StateNotifier<List<ChurchEvent>> {
+  final String churchId;
+  final String? branchFilter;
+  final String? departmentFilter;
+  final bool crossChurch;
+  final String? ministryTypeFilter;
+
+  EventNotifier(this.churchId, this.branchFilter, this.departmentFilter,
+      {this.crossChurch = false, this.ministryTypeFilter})
+      : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllEventsAcrossChurches()
+        : LocalDb.getAllEvents(
+            churchId: churchId,
+            branchId: branchFilter,
+            departmentId: departmentFilter,
+            ministryType: ministryTypeFilter,
+          );
+  }
+
+  Future<void> save(ChurchEvent event) async {
+    await LocalDb.saveEvent(event);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteEvent(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final eventProvider =
+    StateNotifierProvider<EventNotifier, List<ChurchEvent>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+
+  String? branchFilter;
+  String? deptFilter;
+  String? ministryTypeFilter;
+
+  // Local church level users see only their branch/department
+  if (user?.role == AppRoles.localChurchAdmin ||
+      user?.role == AppRoles.seniorPastor ||
+      user?.role == AppRoles.associatePastor ||
+      user?.role == AppRoles.churchSecretary ||
+      user?.role == AppRoles.financeOfficer ||
+      user?.role == AppRoles.youthMinistryHead ||
+      user?.role == AppRoles.menFellowshipHead ||
+      user?.role == AppRoles.womenFellowshipHead ||
+      user?.role == AppRoles.childrenMinistryHead) {
+    branchFilter = (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  } else if (user?.role == AppRoles.ministryHead ||
+      user?.role == AppRoles.cellLeader ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.member) {
+    branchFilter = (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+    deptFilter = (user?.departmentId.isNotEmpty ?? false) ? user?.departmentId : null;
+  }
+
+  // Ministry-specific heads see only their ministry events
+  if (user?.role == AppRoles.youthMinistryHead) {
+    ministryTypeFilter = MinistryType.youth;
+  } else if (user?.role == AppRoles.menFellowshipHead) {
+    ministryTypeFilter = MinistryType.menFellowship;
+  } else if (user?.role == AppRoles.womenFellowshipHead) {
+    ministryTypeFilter = MinistryType.womenFellowship;
+  } else if (user?.role == AppRoles.childrenMinistryHead) {
+    ministryTypeFilter = MinistryType.children;
+  }
+
+  return EventNotifier(churchId, branchFilter, deptFilter,
+      crossChurch: _isCrossChurchRole(user?.role),
+      ministryTypeFilter: ministryTypeFilter);
+});
+
+// ── Organizations ─────────────────────────────────────────────────────────────
+
+class OrganizationNotifier extends StateNotifier<List<Organization>> {
+  final bool crossChurch;
+  OrganizationNotifier({this.crossChurch = false}) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    final list = crossChurch
+        ? LocalDb.getAllOrganizationsAcrossChurches()
+        : LocalDb.getAllOrganizations();
+    list.sort((a, b) => a.name.compareTo(b.name));
+    state = list;
+  }
+
+  Future<void> add({
+    required String name,
+    required String description,
+    required String adminId,
+    required String address,
+    required String phone,
+    required String email,
+    required String website,
+  }) async {
+    final org = Organization(
+      id: _uuid.v4(),
+      name: name,
+      description: description,
+      adminId: adminId,
+      address: address,
+      phone: phone,
+      email: email,
+      website: website,
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveOrganization(org);
+    _load();
+  }
+
+  Future<void> update(Organization org) async {
+    await LocalDb.saveOrganization(org);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteOrganization(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final organizationProvider =
+    StateNotifierProvider<OrganizationNotifier, List<Organization>>((ref) {
+  final user = ref.watch(appStateProvider).user;
+  return OrganizationNotifier(crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Regions ─────────────────────────────────────────────────────────────────
+
+class RegionNotifier extends StateNotifier<List<Region>> {
+  final String? organizationId;
+  final bool crossChurch;
+
+  RegionNotifier(this.organizationId, {this.crossChurch = false}) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    final list = crossChurch
+        ? LocalDb.getAllRegionsAcrossChurches(organizationId: organizationId)
+        : LocalDb.getAllRegions(organizationId: organizationId);
+    list.sort((a, b) => a.name.compareTo(b.name));
+    state = list;
+  }
+
+  Future<void> add({
+    required String name,
+    required String organizationId,
+    required String adminId,
+    required String description,
+    required String address,
+    required String phone,
+    required String email,
+  }) async {
+    final region = Region(
+      id: _uuid.v4(),
+      name: name,
+      organizationId: organizationId,
+      adminId: adminId,
+      description: description,
+      address: address,
+      phone: phone,
+      email: email,
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveRegion(region);
+    _load();
+  }
+
+  Future<void> update(Region region) async {
+    await LocalDb.saveRegion(region);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteRegion(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final regionProvider =
+    StateNotifierProvider<RegionNotifier, List<Region>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final user = appState.user;
+  String? orgId;
+  if (user?.role == AppRoles.superSystemAdmin) {
+    orgId = null; // See all
+  } else if (user?.organizationId != null) {
+    orgId = user?.organizationId;
+  }
+  return RegionNotifier(orgId,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Districts ───────────────────────────────────────────────────────────────
+
+class DistrictNotifier extends StateNotifier<List<District>> {
+  final String? regionId;
+  final bool crossChurch;
+
+  DistrictNotifier(this.regionId, {this.crossChurch = false}) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    final list = crossChurch
+        ? LocalDb.getAllDistrictsAcrossChurches(regionId: regionId)
+        : LocalDb.getAllDistricts(regionId: regionId);
+    list.sort((a, b) => a.name.compareTo(b.name));
+    state = list;
+  }
+
+  Future<void> add({
+    required String name,
+    required String regionId,
+    required String adminId,
+    required String description,
+    required String address,
+    required String phone,
+    required String email,
+  }) async {
+    final district = District(
+      id: _uuid.v4(),
+      name: name,
+      regionId: regionId,
+      adminId: adminId,
+      description: description,
+      address: address,
+      phone: phone,
+      email: email,
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveDistrict(district);
+    _load();
+  }
+
+  Future<void> update(District district) async {
+    await LocalDb.saveDistrict(district);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteDistrict(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final districtProvider =
+    StateNotifierProvider<DistrictNotifier, List<District>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final user = appState.user;
+  String? regionId;
+  // Only filter by regionId if user is at district level or below
+  if (user?.role == AppRoles.districtAdmin ||
+      user?.role == AppRoles.districtPastor ||
+      user?.role == AppRoles.areaAdmin ||
+      user?.role == AppRoles.localChurchAdmin ||
+      user?.role == AppRoles.seniorPastor ||
+      user?.role == AppRoles.associatePastor ||
+      user?.role == AppRoles.churchSecretary ||
+      user?.role == AppRoles.financeOfficer ||
+      user?.role == AppRoles.ministryHead ||
+      user?.role == AppRoles.cellLeader ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.member) {
+    regionId = user?.regionId;
+  }
+  return DistrictNotifier(regionId,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Areas ────────────────────────────────────────────────────────────────────
+
+class AreaNotifier extends StateNotifier<List<Area>> {
+  final String? districtId;
+  final bool crossChurch;
+
+  AreaNotifier(this.districtId, {this.crossChurch = false}) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    final list = crossChurch
+        ? LocalDb.getAllAreasAcrossChurches(districtId: districtId)
+        : LocalDb.getAllAreas(districtId: districtId);
+    list.sort((a, b) => a.name.compareTo(b.name));
+    state = list;
+  }
+
+  Future<void> add({
+    required String name,
+    required String districtId,
+    required String adminId,
+    required String description,
+    required String address,
+    required String phone,
+    required String email,
+  }) async {
+    final area = Area(
+      id: _uuid.v4(),
+      name: name,
+      districtId: districtId,
+      adminId: adminId,
+      description: description,
+      address: address,
+      phone: phone,
+      email: email,
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveArea(area);
+    _load();
+  }
+
+  Future<void> update(Area area) async {
+    await LocalDb.saveArea(area);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteArea(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final areaProvider =
+    StateNotifierProvider<AreaNotifier, List<Area>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final user = appState.user;
+  String? districtId;
+  // Only filter by districtId if user is at area level or below
+  if (user?.role == AppRoles.areaAdmin ||
+      user?.role == AppRoles.localChurchAdmin ||
+      user?.role == AppRoles.seniorPastor ||
+      user?.role == AppRoles.associatePastor ||
+      user?.role == AppRoles.churchSecretary ||
+      user?.role == AppRoles.financeOfficer ||
+      user?.role == AppRoles.ministryHead ||
+      user?.role == AppRoles.cellLeader ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.member) {
+    districtId = user?.districtId;
+  }
+  return AreaNotifier(districtId,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Welfare Cases ─────────────────────────────────────────────────────────────
+
+class WelfareNotifier extends StateNotifier<List<WelfareCase>> {
+  final String churchId;
+  final String? branchFilter;
+  final String? statusFilter;
+
+  WelfareNotifier(
+    this.churchId, {
+    this.branchFilter,
+    this.statusFilter,
+  }) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllWelfareCases(
+      churchId: churchId,
+      branchId: branchFilter,
+      status: statusFilter,
+    );
+  }
+
+  Future<void> add(WelfareCase welfareCase) async {
+    await LocalDb.saveWelfareCase(welfareCase);
+    _load();
+  }
+
+  Future<void> update(WelfareCase welfareCase) async {
+    await LocalDb.saveWelfareCase(welfareCase);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteWelfareCase(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final welfareProvider =
+    StateNotifierProvider<WelfareNotifier, List<WelfareCase>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  String? branchFilter;
+
+  // Local church level users see only their branch
+  if (user?.role == AppRoles.localChurchAdmin ||
+      user?.role == AppRoles.seniorPastor ||
+      user?.role == AppRoles.associatePastor ||
+      user?.role == AppRoles.churchSecretary ||
+      user?.role == AppRoles.welfareHead ||
+      user?.role == AppRoles.ministryHead ||
+      user?.role == AppRoles.cellLeader ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.member) {
+    branchFilter =
+        (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  }
+
+  return WelfareNotifier(churchId, branchFilter: branchFilter);
+});
+
+// ── Welfare Finance (Transactions) ────────────────────────────────────────────
+
+class WelfareTransactionNotifier extends StateNotifier<List<WelfareTransaction>> {
+  final String churchId;
+  final String? branchFilter;
+
+  WelfareTransactionNotifier(
+    this.churchId, {
+    this.branchFilter,
+  }) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllWelfareTransactions(
+      churchId: churchId,
+      branchId: branchFilter,
+    );
+  }
+
+  Future<void> add(WelfareTransaction txn) async {
+    await LocalDb.saveWelfareTransaction(txn);
+    _load();
+  }
+
+  Future<void> update(WelfareTransaction txn) async {
+    await LocalDb.saveWelfareTransaction(txn);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteWelfareTransaction(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final welfareFinanceProvider =
+    StateNotifierProvider<WelfareTransactionNotifier, List<WelfareTransaction>>(
+        (ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  String? branchFilter;
+
+  if (user?.role == AppRoles.localChurchAdmin ||
+      user?.role == AppRoles.seniorPastor ||
+      user?.role == AppRoles.associatePastor ||
+      user?.role == AppRoles.churchSecretary ||
+      user?.role == AppRoles.welfareHead ||
+      user?.role == AppRoles.ministryHead ||
+      user?.role == AppRoles.cellLeader ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.member) {
+    branchFilter =
+        (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  }
+
+  return WelfareTransactionNotifier(churchId, branchFilter: branchFilter);
+});
+
+// ── Department Welfare ────────────────────────────────────────────────────────
+
+class DepartmentWelfareNotifier extends StateNotifier<List<DepartmentWelfare>> {
+  final String churchId;
+  final String? branchFilter;
+
+  DepartmentWelfareNotifier(
+    this.churchId, {
+    this.branchFilter,
+  }) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllDepartmentWelfare(
+      churchId: churchId,
+      branchId: branchFilter,
+    );
+  }
+
+  Future<void> add(DepartmentWelfare dw) async {
+    await LocalDb.saveDepartmentWelfare(dw);
+    _load();
+  }
+
+  Future<void> update(DepartmentWelfare dw) async {
+    await LocalDb.saveDepartmentWelfare(dw);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteDepartmentWelfare(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final departmentWelfareProvider =
+    StateNotifierProvider<DepartmentWelfareNotifier, List<DepartmentWelfare>>(
+        (ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  String? branchFilter;
+
+  if (user?.role == AppRoles.localChurchAdmin ||
+      user?.role == AppRoles.seniorPastor ||
+      user?.role == AppRoles.associatePastor ||
+      user?.role == AppRoles.churchSecretary ||
+      user?.role == AppRoles.welfareHead ||
+      user?.role == AppRoles.ministryHead ||
+      user?.role == AppRoles.cellLeader ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.member) {
+    branchFilter =
+        (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  }
+
+  return DepartmentWelfareNotifier(churchId, branchFilter: branchFilter);
+});
+
+// ── Welfare Statements ───────────────────────────────────────────────────────
+
+class WelfareStatementNotifier extends StateNotifier<List<WelfareStatement>> {
+  final String churchId;
+  final String? branchFilter;
+  final String? memberFilter;
+
+  WelfareStatementNotifier(
+    this.churchId, {
+    this.branchFilter,
+    this.memberFilter,
+  }) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllWelfareStatements(
+      churchId: churchId,
+      branchId: branchFilter,
+      memberId: memberFilter,
+    );
+  }
+
+  Future<void> add(WelfareStatement stmt) async {
+    await LocalDb.saveWelfareStatement(stmt);
+    _load();
+  }
+
+  Future<void> update(WelfareStatement stmt) async {
+    await LocalDb.saveWelfareStatement(stmt);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteWelfareStatement(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final welfareStatementProvider =
+    StateNotifierProvider<WelfareStatementNotifier, List<WelfareStatement>>(
+        (ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  String? branchFilter;
+  String? memberFilter;
+
+  // Members see only their own statements
+  if (user?.role == AppRoles.member ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.cellLeader) {
+    memberFilter = user?.id;
+  }
+
+  // Local church level users see only their branch
+  if (user?.role == AppRoles.localChurchAdmin ||
+      user?.role == AppRoles.seniorPastor ||
+      user?.role == AppRoles.associatePastor ||
+      user?.role == AppRoles.churchSecretary ||
+      user?.role == AppRoles.welfareHead ||
+      user?.role == AppRoles.ministryHead ||
+      user?.role == AppRoles.cellLeader ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.member) {
+    branchFilter =
+        (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  }
+
+  return WelfareStatementNotifier(churchId,
+      branchFilter: branchFilter, memberFilter: memberFilter);
+});
+
+// ── Shared Reports ───────────────────────────────────────────────────────────
+
+class SharedReportNotifier extends StateNotifier<List<SharedReport>> {
+  final String churchId;
+  final String? branchFilter;
+  final String? memberFilter;
+
+  SharedReportNotifier(
+    this.churchId, {
+    this.branchFilter,
+    this.memberFilter,
+  }) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    if (memberFilter != null) {
+      state = LocalDb.getAllSharedReports(
+        churchId: churchId,
+        branchId: branchFilter,
+        sharedToMemberId: memberFilter,
+      );
+    } else {
+      state = LocalDb.getAllSharedReports(
+        churchId: churchId,
+        branchId: branchFilter,
+      );
+    }
+  }
+
+  Future<void> add(SharedReport report) async {
+    await LocalDb.saveSharedReport(report);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteSharedReport(id);
+    _load();
+  }
+
+  Future<void> markRead(String id) async {
+    await LocalDb.markSharedReportRead(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final sharedReportProvider =
+    StateNotifierProvider<SharedReportNotifier, List<SharedReport>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  String? branchFilter;
+  String? memberFilter;
+
+  // Members see only reports shared to them
+  if (user?.role == AppRoles.member ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.cellLeader) {
+    memberFilter = user?.id;
+  }
+
+  // Local church level users see only their branch
+  if (user?.role == AppRoles.localChurchAdmin ||
+      user?.role == AppRoles.seniorPastor ||
+      user?.role == AppRoles.associatePastor ||
+      user?.role == AppRoles.churchSecretary ||
+      user?.role == AppRoles.welfareHead ||
+      user?.role == AppRoles.ministryHead ||
+      user?.role == AppRoles.cellLeader ||
+      user?.role == AppRoles.volunteer ||
+      user?.role == AppRoles.member) {
+    branchFilter =
+        (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  }
+
+  return SharedReportNotifier(churchId,
+      branchFilter: branchFilter, memberFilter: memberFilter);
+});
+
+// ── Ministries ───────────────────────────────────────────────────────────────
+
+class MinistryNotifier extends StateNotifier<List<Ministry>> {
+  final String churchId;
+  final String? branchFilter;
+  final String? typeFilter;
+  final String? orgId, regId, distId, arId;
+
+  MinistryNotifier(
+    this.churchId, {
+    this.branchFilter,
+    this.typeFilter,
+    this.orgId,
+    this.regId,
+    this.distId,
+    this.arId,
+  }) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllMinistries(
+      churchId: churchId,
+      branchId: branchFilter,
+      ministryType: typeFilter,
+      organizationId: orgId,
+      regionId: regId,
+      districtId: distId,
+      areaId: arId,
+    );
+  }
+
+  Future<void> add(Ministry ministry) async {
+    await LocalDb.saveMinistry(ministry);
+    _load();
+  }
+
+  Future<void> update(Ministry ministry) async {
+    await LocalDb.saveMinistry(ministry);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteMinistry(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final ministryProvider =
+    StateNotifierProvider<MinistryNotifier, List<Ministry>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  String? branchFilter;
+  String? typeFilter;
+  String? orgId, regId, distId, arId;
+
+  // Multi-tenant hierarchical filtering
+  if (user?.role == AppRoles.nationalAdmin ||
+      user?.role == AppRoles.nationalExecutive ||
+      user?.role == AppRoles.superSystemAdmin) {
+    orgId = user?.organizationId;
+  } else if (user?.role == AppRoles.regionalAdmin ||
+      user?.role == AppRoles.regionalBishop) {
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+  } else if (user?.role == AppRoles.districtAdmin ||
+      user?.role == AppRoles.districtPastor) {
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+    distId = user?.districtId;
+  } else if (user?.role == AppRoles.areaAdmin) {
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+    distId = user?.districtId;
+    arId = user?.areaId;
+  } else {
+    // Local church level — branch scoped
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+    distId = user?.districtId;
+    arId = user?.areaId;
+    branchFilter =
+        (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  }
+
+  // Ministry-specific heads see only their ministry type
+  if (user?.role == AppRoles.youthMinistryHead) {
+    typeFilter = MinistryType.youth;
+  } else if (user?.role == AppRoles.menFellowshipHead) {
+    typeFilter = MinistryType.menFellowship;
+  } else if (user?.role == AppRoles.womenFellowshipHead) {
+    typeFilter = MinistryType.womenFellowship;
+  } else if (user?.role == AppRoles.childrenMinistryHead) {
+    typeFilter = MinistryType.children;
+  }
+
+  return MinistryNotifier(churchId,
+      branchFilter: branchFilter,
+      typeFilter: typeFilter,
+      orgId: orgId,
+      regId: regId,
+      distId: distId,
+      arId: arId);
+});
+
+// ── Ministry Finance ─────────────────────────────────────────────────────────
+
+class MinistryFinanceNotifier extends StateNotifier<List<MinistryFinance>> {
+  final String churchId;
+  final String? branchFilter;
+  final String? ministryTypeFilter;
+  final String? orgId, regId, distId, arId;
+
+  MinistryFinanceNotifier(
+    this.churchId, {
+    this.branchFilter,
+    this.ministryTypeFilter,
+    this.orgId,
+    this.regId,
+    this.distId,
+    this.arId,
+  }) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllMinistryFinance(
+      churchId: churchId,
+      branchId: branchFilter,
+      ministryType: ministryTypeFilter,
+      organizationId: orgId,
+      regionId: regId,
+      districtId: distId,
+      areaId: arId,
+    );
+  }
+
+  Future<void> add(MinistryFinance tx) async {
+    await LocalDb.saveMinistryFinance(tx);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteMinistryFinance(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final ministryFinanceProvider =
+    StateNotifierProvider<MinistryFinanceNotifier, List<MinistryFinance>>(
+        (ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+
+  String? branchFilter;
+  String? typeFilter;
+  String? orgId, regId, distId, arId;
+
+  // Multi-tenant hierarchical filtering
+  if (user?.role == AppRoles.nationalAdmin ||
+      user?.role == AppRoles.nationalExecutive ||
+      user?.role == AppRoles.superSystemAdmin) {
+    orgId = user?.organizationId;
+  } else if (user?.role == AppRoles.regionalAdmin ||
+      user?.role == AppRoles.regionalBishop) {
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+  } else if (user?.role == AppRoles.districtAdmin ||
+      user?.role == AppRoles.districtPastor) {
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+    distId = user?.districtId;
+  } else if (user?.role == AppRoles.areaAdmin) {
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+    distId = user?.districtId;
+    arId = user?.areaId;
+  } else {
+    // Local church level — branch scoped
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+    distId = user?.districtId;
+    arId = user?.areaId;
+    branchFilter =
+        (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  }
+
+  // Ministry-specific heads see only their ministry type
+  if (user?.role == AppRoles.youthMinistryHead) {
+    typeFilter = MinistryType.youth;
+  } else if (user?.role == AppRoles.menFellowshipHead) {
+    typeFilter = MinistryType.menFellowship;
+  } else if (user?.role == AppRoles.womenFellowshipHead) {
+    typeFilter = MinistryType.womenFellowship;
+  } else if (user?.role == AppRoles.childrenMinistryHead) {
+    typeFilter = MinistryType.children;
+  }
+
+  return MinistryFinanceNotifier(churchId,
+      branchFilter: branchFilter,
+      ministryTypeFilter: typeFilter,
+      orgId: orgId,
+      regId: regId,
+      distId: distId,
+      arId: arId);
+});
+
+// ── Ministry Announcements ───────────────────────────────────────────────────
+
+class MinistryAnnouncementNotifier
+    extends StateNotifier<List<MinistryAnnouncement>> {
+  final String churchId;
+  final String? branchFilter;
+  final String? ministryTypeFilter;
+  final String? memberIdFilter;
+  final String? orgId, regId, distId, arId;
+
+  MinistryAnnouncementNotifier(
+    this.churchId, {
+    this.branchFilter,
+    this.ministryTypeFilter,
+    this.memberIdFilter,
+    this.orgId,
+    this.regId,
+    this.distId,
+    this.arId,
+  }) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllMinistryAnnouncements(
+      churchId: churchId,
+      branchId: branchFilter,
+      ministryType: ministryTypeFilter,
+      memberId: memberIdFilter,
+      organizationId: orgId,
+      regionId: regId,
+      districtId: distId,
+      areaId: arId,
+    );
+  }
+
+  Future<void> add(MinistryAnnouncement ann) async {
+    await LocalDb.saveMinistryAnnouncement(ann);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteMinistryAnnouncement(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final ministryAnnouncementProvider = StateNotifierProvider<
+    MinistryAnnouncementNotifier, List<MinistryAnnouncement>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+
+  String? branchFilter;
+  String? typeFilter;
+  String? orgId, regId, distId, arId;
+
+  if (user?.role == AppRoles.nationalAdmin ||
+      user?.role == AppRoles.nationalExecutive ||
+      user?.role == AppRoles.superSystemAdmin) {
+    orgId = user?.organizationId;
+  } else if (user?.role == AppRoles.regionalAdmin ||
+      user?.role == AppRoles.regionalBishop) {
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+  } else if (user?.role == AppRoles.districtAdmin ||
+      user?.role == AppRoles.districtPastor) {
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+    distId = user?.districtId;
+  } else if (user?.role == AppRoles.areaAdmin) {
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+    distId = user?.districtId;
+    arId = user?.areaId;
+  } else {
+    orgId = user?.organizationId;
+    regId = user?.regionId;
+    distId = user?.districtId;
+    arId = user?.areaId;
+    branchFilter =
+        (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  }
+
+  if (user?.role == AppRoles.youthMinistryHead) {
+    typeFilter = MinistryType.youth;
+  } else if (user?.role == AppRoles.menFellowshipHead) {
+    typeFilter = MinistryType.menFellowship;
+  } else if (user?.role == AppRoles.womenFellowshipHead) {
+    typeFilter = MinistryType.womenFellowship;
+  } else if (user?.role == AppRoles.childrenMinistryHead) {
+    typeFilter = MinistryType.children;
+  }
+
+  return MinistryAnnouncementNotifier(churchId,
+      branchFilter: branchFilter,
+      ministryTypeFilter: typeFilter,
+      orgId: orgId,
+      regId: regId,
+      distId: distId,
+      arId: arId);
+});
+
+// ── Ministry Auto-Assignment by Age/Gender ───────────────────────────────────
+
+class MinistryAssignment {
+  static String? getMinistryTypeForMember(Member member) {
+    final dob = member.dateOfBirth;
+    if (dob == null) return null;
+
+    final age = DateTime.now().difference(dob).inDays ~/ 365;
+    final isMale = member.gender.toLowerCase() == 'male';
+
+    if (age < 13) {
+      return MinistryType.children;
+    } else if (age >= 13 && age <= 45) {
+      return MinistryType.youth;
+    } else {
+      // Above 45
+      return isMale ? MinistryType.menFellowship : MinistryType.womenFellowship;
+    }
+  }
+
+  static int getAge(Member member) {
+    if (member.dateOfBirth == null) return 0;
+    return DateTime.now().difference(member.dateOfBirth!).inDays ~/ 365;
+  }
+
+  static List<Member> getMembersForMinistry(
+      List<Member> allMembers, String ministryType) {
+    return allMembers.where((m) {
+      if (m.dateOfBirth == null) return false;
+      final type = getMinistryTypeForMember(m);
+      return type == ministryType;
+    }).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+  }
+}
+
+// ── Member Contributions ──────────────────────────────────────────────────────
+
+class ContributionNotifier extends StateNotifier<List<MemberContribution>> {
+  final String churchId;
+  final String? branchFilter;
+  final String? memberIdFilter;
+
+  ContributionNotifier(this.churchId, this.branchFilter, this.memberIdFilter)
+      : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllContributions(
+      churchId: churchId,
+      branchId: branchFilter,
+      memberId: memberIdFilter,
+    );
+  }
+
+  Future<void> add(MemberContribution c) async {
+    await LocalDb.saveContribution(c);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteContribution(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final contributionProvider =
+    StateNotifierProvider<ContributionNotifier, List<MemberContribution>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  final branchFilter =
+      (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  return ContributionNotifier(churchId, branchFilter, null);
+});
+
+final myContributionProvider =
+    StateNotifierProvider<ContributionNotifier, List<MemberContribution>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  return ContributionNotifier(
+      appState.church?.id ?? '', appState.user?.branchId, appState.user?.id);
+});
+
+// ── Benefit Requests ──────────────────────────────────────────────────────────
+
+class BenefitRequestNotifier extends StateNotifier<List<BenefitRequest>> {
+  final String churchId;
+  final String? branchFilter;
+  final String? memberIdFilter;
+
+  BenefitRequestNotifier(this.churchId, this.branchFilter, this.memberIdFilter)
+      : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllBenefitRequests(
+      churchId: churchId,
+      branchId: branchFilter,
+      memberId: memberIdFilter,
+    );
+  }
+
+  Future<void> add(BenefitRequest r) async {
+    await LocalDb.saveBenefitRequest(r);
+    _load();
+  }
+
+  Future<void> update(BenefitRequest r) async {
+    await LocalDb.saveBenefitRequest(r);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteBenefitRequest(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final benefitRequestProvider =
+    StateNotifierProvider<BenefitRequestNotifier, List<BenefitRequest>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  final branchFilter = (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  return BenefitRequestNotifier(churchId, branchFilter, null);
+});
+
+final myBenefitRequestProvider =
+    StateNotifierProvider<BenefitRequestNotifier, List<BenefitRequest>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  return BenefitRequestNotifier(
+      appState.church?.id ?? '', appState.user?.branchId, appState.user?.id);
+});
+
+// ── Budgets ───────────────────────────────────────────────────────────────────
+
+class BudgetNotifier extends StateNotifier<List<Budget>> {
+  final String churchId;
+  final String? branchFilter;
+
+  BudgetNotifier(this.churchId, this.branchFilter) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllBudgets(churchId: churchId, branchId: branchFilter);
+  }
+
+  Future<void> add(Budget b) async {
+    await LocalDb.saveBudget(b);
+    _load();
+  }
+
+  Future<void> update(Budget b) async {
+    await LocalDb.saveBudget(b);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteBudget(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final budgetProvider =
+    StateNotifierProvider<BudgetNotifier, List<Budget>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  final branchFilter =
+      (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  return BudgetNotifier(churchId, branchFilter);
+});
+
+// ── Finance Approvals ─────────────────────────────────────────────────────────
+
+class FinanceApprovalNotifier
+    extends StateNotifier<List<FinanceApprovalRequest>> {
+  final String churchId;
+  final String? branchFilter;
+  final bool crossChurch;
+
+  FinanceApprovalNotifier(this.churchId, this.branchFilter,
+      {this.crossChurch = false})
+      : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllFinanceApprovalsAcrossChurches()
+        : LocalDb.getAllFinanceApprovals(
+            churchId: churchId, branchId: branchFilter);
+  }
+
+  Future<void> add(FinanceApprovalRequest r) async {
+    await LocalDb.saveFinanceApproval(r);
+    _load();
+  }
+
+  Future<void> approve(FinanceApprovalRequest r, String approverId, String approverName) async {
+    final updated = r.copyWith(
+      status: FinanceApprovalStatus.approved,
+      approverId: approverId,
+      approverName: approverName,
+      decidedAt: DateTime.now(),
+    );
+    await LocalDb.saveFinanceApproval(updated);
+    _load();
+  }
+
+  Future<void> reject(FinanceApprovalRequest r, String approverId, String approverName, String reason) async {
+    final updated = r.copyWith(
+      status: FinanceApprovalStatus.rejected,
+      approverId: approverId,
+      approverName: approverName,
+      rejectionReason: reason,
+      decidedAt: DateTime.now(),
+    );
+    await LocalDb.saveFinanceApproval(updated);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteFinanceApproval(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final financeApprovalProvider =
+    StateNotifierProvider<FinanceApprovalNotifier, List<FinanceApprovalRequest>>(
+        (ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  final branchFilter =
+      (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
+  return FinanceApprovalNotifier(churchId, branchFilter,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+class NotificationNotifier extends StateNotifier<List<AppNotification>> {
+  final String churchId;
+  final String userId;
+
+  NotificationNotifier(this.churchId, this.userId) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    if (churchId.isEmpty || userId.isEmpty) return;
+    state = LocalDb.getNotifications(churchId: churchId, userId: userId);
+  }
+
+  Future<void> add(AppNotification notification) async {
+    await LocalDb.saveNotification(notification);
+    _load();
+  }
+
+  Future<void> markRead(String notificationId) async {
+    await LocalDb.markNotificationRead(notificationId, churchId: churchId, userId: userId);
+    _load();
+  }
+
+  Future<void> markAllRead() async {
+    await LocalDb.markAllNotificationsRead(churchId: churchId, userId: userId);
+    _load();
+  }
+
+  Future<void> delete(String notificationId) async {
+    await LocalDb.deleteNotification(notificationId, churchId: churchId);
+    _load();
+  }
+
+  void refresh() => _load();
+
+  int get unreadCount => state.where((n) => !n.isRead).length;
+}
+
+final notificationProvider =
+    StateNotifierProvider<NotificationNotifier, List<AppNotification>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  return NotificationNotifier(
+    appState.church?.id ?? '',
+    appState.user?.id ?? '',
+  );
+});
+
+/// Generates notifications from existing app data (approvals, events, welfare, etc.)
+/// and saves any new ones that don't already exist.
+Future<void> generateAutoNotifications(WidgetRef ref) async {
+  final appState = ref.read(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final userId = appState.user?.id ?? '';
+  if (churchId.isEmpty || userId.isEmpty) return;
+
+  final existing = ref.read(notificationProvider);
+  final existingKeys = existing.map((n) => '${n.type}:${n.title}').toSet();
+
+  final notifs = <AppNotification>[];
+
+  // Pending finance approvals
+  final approvals = ref.read(financeApprovalProvider);
+  final pendingApprovals = approvals.where((a) => a.status == FinanceApprovalStatus.pending).toList();
+  if (pendingApprovals.isNotEmpty) {
+    final key = '${AppNotification.typeApproval}:Pending Approvals';
+    if (!existingKeys.contains(key)) {
+      notifs.add(AppNotification(
+        id: _uuid.v4(),
+        churchId: churchId,
+        userId: userId,
+        title: 'Pending Approvals',
+        body: '${pendingApprovals.length} finance approval(s) awaiting your review',
+        type: AppNotification.typeApproval,
+        route: '/finance/approvals',
+        createdAt: DateTime.now(),
+      ));
+    }
+  }
+
+  // Upcoming events (next 7 days)
+  final events = ref.read(eventProvider);
+  final now = DateTime.now();
+  final upcoming = events.where((e) {
+    return e.startDate.isAfter(now) && e.startDate.isBefore(now.add(const Duration(days: 7)));
+  }).toList();
+  if (upcoming.isNotEmpty) {
+    final key = '${AppNotification.typeEvent}:Upcoming Events';
+    if (!existingKeys.contains(key)) {
+      notifs.add(AppNotification(
+        id: _uuid.v4(),
+        churchId: churchId,
+        userId: userId,
+        title: 'Upcoming Events',
+        body: '${upcoming.length} event(s) in the next 7 days',
+        type: AppNotification.typeEvent,
+        route: '/events',
+        createdAt: DateTime.now(),
+      ));
+    }
+  }
+
+  // Open welfare cases
+  final welfareCases = ref.read(welfareProvider);
+  final openCases = welfareCases.where((c) => c.status == WelfareStatus.open).toList();
+  if (openCases.isNotEmpty) {
+    final key = '${AppNotification.typeWelfare}:Open Welfare Cases';
+    if (!existingKeys.contains(key)) {
+      notifs.add(AppNotification(
+        id: _uuid.v4(),
+        churchId: churchId,
+        userId: userId,
+        title: 'Open Welfare Cases',
+        body: '${openCases.length} welfare case(s) need attention',
+        type: AppNotification.typeWelfare,
+        route: '/welfare',
+        createdAt: DateTime.now(),
+      ));
+    }
+  }
+
+  // Pending welfare cases
+  final pendingCases = welfareCases.where((c) => c.status == WelfareStatus.pending).toList();
+  if (pendingCases.isNotEmpty) {
+    final key = '${AppNotification.typeWelfare}:Pending Welfare Cases';
+    if (!existingKeys.contains(key)) {
+      notifs.add(AppNotification(
+        id: _uuid.v4(),
+        churchId: churchId,
+        userId: userId,
+        title: 'Pending Welfare Cases',
+        body: '${pendingCases.length} welfare case(s) pending review',
+        type: AppNotification.typeWelfare,
+        route: '/welfare',
+        createdAt: DateTime.now(),
+      ));
+    }
+  }
+
+  // New members this month
+  final members = ref.read(memberProvider);
+  final newMembers = members.where((m) =>
+      m.membershipDate.month == now.month && m.membershipDate.year == now.year).length;
+  if (newMembers > 0) {
+    final key = '${AppNotification.typeMember}:New Members This Month';
+    if (!existingKeys.contains(key)) {
+      notifs.add(AppNotification(
+        id: _uuid.v4(),
+        churchId: churchId,
+        userId: userId,
+        title: 'New Members This Month',
+        body: '$newMembers new member(s) joined this month',
+        type: AppNotification.typeMember,
+        route: '/members',
+        createdAt: DateTime.now(),
+      ));
+    }
+  }
+
+  // Save all new notifications
+  for (final n in notifs) {
+    await ref.read(notificationProvider.notifier).add(n);
+  }
+}
