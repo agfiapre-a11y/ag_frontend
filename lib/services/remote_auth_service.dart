@@ -1,6 +1,7 @@
 import '../models/app_user.dart';
 import '../models/church.dart';
 import '../models/tenant_config.dart';
+import '../core/constants.dart';
 import 'api_client.dart';
 import 'api_config.dart';
 
@@ -79,17 +80,31 @@ class RemoteAuthService {
     }
   }
 
-  static Future<TenantConfig> _fetchTenant(String? tenantId) async {
+  static Future<TenantConfig?> _fetchTenant(String? tenantId) async {
     if (tenantId == null || tenantId.isEmpty) {
-      throw StateError('User is not associated with a tenant');
+      return null;
     }
     final resp = await _api.get('/tenants/by-id/$tenantId');
     return TenantConfig.fromJson(resp);
   }
 
+  /// Maps backend snake_case roles to Flutter camelCase roles.
+  static String _mapRole(String backendRole) {
+    const mapping = {
+      'super_system_admin': AppRoles.superSystemAdmin,
+      'church_admin': AppRoles.localChurchAdmin,
+      'branch_admin': AppRoles.branchAdmin,
+      'secretary': AppRoles.churchSecretary,
+      'treasurer': AppRoles.financeOfficer,
+      'member': AppRoles.member,
+      'observer': AppRoles.guest,
+    };
+    return mapping[backendRole] ?? backendRole;
+  }
+
   static RemoteAuthResult _mapAuthResponse(
     Map<String, dynamic> authResp,
-    TenantConfig tenant,
+    TenantConfig? tenant,
   ) {
     final accessToken = authResp['accessToken'] as String;
     final refreshToken = authResp['refreshToken'] as String;
@@ -102,22 +117,32 @@ class RemoteAuthService {
       name: userJson['name'] as String,
       email: userJson['email'] as String,
       passwordHash: '',
-      role: userJson['role'] as String,
+      role: _mapRole(userJson['role'] as String),
       churchId: userJson['tenantId'] as String? ?? '',
       branchId: '',
       phone: '',
       createdAt: DateTime.now(),
     );
 
-    final church = Church(
-      id: tenant.id,
-      name: tenant.name,
-      adminId: user.id,
-      address: tenant.address ?? '',
-      phone: tenant.phone ?? '',
-      email: tenant.email ?? '',
-      createdAt: DateTime.now(),
-    );
+    final church = tenant != null
+        ? Church(
+            id: tenant.id,
+            name: tenant.name,
+            adminId: user.id,
+            address: tenant.address ?? '',
+            phone: tenant.phone ?? '',
+            email: tenant.email ?? '',
+            createdAt: DateTime.now(),
+          )
+        : Church(
+            id: 'system',
+            name: 'Assemblies of God, Ghana',
+            adminId: user.id,
+            address: 'P.O. Box AN 7644, Accra-North, Ghana',
+            phone: '0302 788 583',
+            email: 'agghanagc@gmail.com',
+            createdAt: DateTime.now(),
+          );
 
     return RemoteAuthResult(
       user: user,
