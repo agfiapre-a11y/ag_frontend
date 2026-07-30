@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/app_user.dart';
 import '../models/church.dart';
+import '../models/tenant_config.dart';
 import '../services/auth_service.dart';
 import '../services/local_db.dart';
 import '../services/tenant_context.dart';
@@ -14,22 +15,26 @@ class AppState {
   final AppInitState initState;
   final AppUser? user;
   final Church? church;
+  final TenantConfig? tenantConfig;
 
   const AppState({
     required this.initState,
     this.user,
     this.church,
+    this.tenantConfig,
   });
 
   AppState copyWith({
     AppInitState? initState,
     AppUser? user,
     Church? church,
+    TenantConfig? tenantConfig,
   }) =>
       AppState(
         initState: initState ?? this.initState,
         user: user ?? this.user,
         church: church ?? this.church,
+        tenantConfig: tenantConfig ?? this.tenantConfig,
       );
 }
 
@@ -74,7 +79,8 @@ class AppStateNotifier extends StateNotifier<AppState> {
       state = AppState(
           initState: AppInitState.authenticated,
           user: result.user,
-          church: result.church);
+          church: result.church,
+          tenantConfig: result.tenantConfig);
       return null;
     } catch (e) {
       return 'Login failed: $e';

@@ -879,8 +879,9 @@ class _QuickAction {
   final IconData icon;
   final String label;
   final String route;
+  final String? module;
 
-  const _QuickAction(this.icon, this.label, this.route);
+  const _QuickAction(this.icon, this.label, this.route, {this.module});
 }
 
 /// A 2-column grid of quick-action tiles.
@@ -1529,7 +1530,9 @@ class _LocalChurchAdminHome extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(appStateProvider).user!;
+    final appState = ref.watch(appStateProvider);
+    final user = appState.user!;
+    final tenantConfig = appState.tenantConfig;
     final members = ref.watch(memberProvider);
     final departments = ref.watch(departmentProvider);
     final users = ref.watch(userProvider);
@@ -1540,6 +1543,22 @@ class _LocalChurchAdminHome extends ConsumerWidget {
         .where((e) => e.isUpcoming)
         .take(3)
         .toList();
+
+    final allActions = [
+      const _QuickAction(Icons.people, 'Members', '/members', module: 'members'),
+      const _QuickAction(Icons.account_tree, 'Branches', '/branches'),
+      const _QuickAction(Icons.groups_2, 'Departments', '/departments'),
+      const _QuickAction(Icons.fact_check, 'Attendance', '/attendance', module: 'attendance'),
+      const _QuickAction(Icons.account_balance_wallet, 'Finance', '/finance', module: 'finance'),
+      const _QuickAction(Icons.volunteer_activism, 'Welfare', '/welfare', module: 'welfare'),
+      const _QuickAction(Icons.event, 'Events', '/events', module: 'events'),
+      const _QuickAction(Icons.video_library, 'Sermons', '/sermons', module: 'sermons'),
+      const _QuickAction(Icons.manage_accounts, 'Users', '/users'),
+      const _QuickAction(Icons.church, 'Ministry', '/ministry'),
+    ];
+    final filteredActions = tenantConfig == null
+        ? allActions
+        : allActions.where((a) => a.module == null || tenantConfig.hasModule(a.module!)).toList();
 
     return _DashboardScaffold(
       user: user,
@@ -1566,19 +1585,9 @@ class _LocalChurchAdminHome extends ConsumerWidget {
           _StatCardData(title: 'Users', value: '${users.length}', icon: Icons.manage_accounts, route: '/users'),
         ]),
         _SectionTitle('Quick Actions'),
-        _QuickActionsGrid(actions: const [
-          _QuickAction(Icons.people, 'Members', '/members'),
-          _QuickAction(Icons.account_tree, 'Branches', '/branches'),
-          _QuickAction(Icons.groups_2, 'Departments', '/departments'),
-          _QuickAction(Icons.fact_check, 'Attendance', '/attendance'),
-          _QuickAction(Icons.account_balance_wallet, 'Finance', '/finance'),
-          _QuickAction(Icons.volunteer_activism, 'Welfare', '/welfare'),
-          _QuickAction(Icons.event, 'Events', '/events'),
-          _QuickAction(Icons.video_library, 'Sermons', '/sermons'),
-          _QuickAction(Icons.manage_accounts, 'Users', '/users'),
-          _QuickAction(Icons.church, 'Ministry', '/ministry'),
-        ]),
-        FinanceDashboardContent(user: user),
+        _QuickActionsGrid(actions: filteredActions),
+        if (tenantConfig == null || tenantConfig.hasModule('finance'))
+          FinanceDashboardContent(user: user),
         _SectionTitle('Upcoming Events',
             actionLabel: 'View all', onAction: () => context.push('/events')),
         if (upcoming.isEmpty)

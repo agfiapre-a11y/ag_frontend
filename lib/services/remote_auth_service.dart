@@ -8,12 +8,14 @@ import 'api_config.dart';
 class RemoteAuthResult {
   final AppUser user;
   final Church church;
+  final TenantConfig? tenantConfig;
   final String accessToken;
   final String refreshToken;
 
   RemoteAuthResult({
     required this.user,
     required this.church,
+    this.tenantConfig,
     required this.accessToken,
     required this.refreshToken,
   });
@@ -147,6 +149,7 @@ class RemoteAuthService {
     return RemoteAuthResult(
       user: user,
       church: church,
+      tenantConfig: tenant,
       accessToken: accessToken,
       refreshToken: refreshToken,
     );

@@ -617,6 +617,9 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
   final _maxMembersCtrl = TextEditingController(text: '500');
   final _maxBranchesCtrl = TextEditingController(text: '5');
   final _subscriptionExpiryCtrl = TextEditingController();
+  final _adminNameCtrl = TextEditingController();
+  final _adminEmailCtrl = TextEditingController();
+  final _adminPasswordCtrl = TextEditingController();
 
   String _subscriptionTier = 'basic';
   String _primaryColor = '#2E7D32';
@@ -660,6 +663,9 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
     _maxMembersCtrl.dispose();
     _maxBranchesCtrl.dispose();
     _subscriptionExpiryCtrl.dispose();
+    _adminNameCtrl.dispose();
+    _adminEmailCtrl.dispose();
+    _adminPasswordCtrl.dispose();
     super.dispose();
   }
 
@@ -708,6 +714,9 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
         primaryColor: _primaryColor,
         secondaryColor: _secondaryColor,
         enabledModules: _enabledModules.toList(),
+        adminName: _adminNameCtrl.text.trim().isNotEmpty ? _adminNameCtrl.text.trim() : null,
+        adminEmail: _adminEmailCtrl.text.trim().isNotEmpty ? _adminEmailCtrl.text.trim() : null,
+        adminPassword: _adminPasswordCtrl.text.isNotEmpty ? _adminPasswordCtrl.text : null,
       );
     }
 
@@ -904,6 +913,43 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
                     );
                   }).toList(),
                 ),
+                if (!isEdit) ...[
+                  const SizedBox(height: 20),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Church Admin Account',
+                        style: GoogleFonts.poppins(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _adminNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Admin Name',
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _adminEmailCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Admin Email',
+                      prefixIcon: Icon(Icons.email),
+                      helperText: 'This will be the login email',
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _adminPasswordCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Admin Password',
+                      prefixIcon: Icon(Icons.lock),
+                      helperText: 'Min 8 characters',
+                    ),
+                    obscureText: true,
+                  ),
+                ],
               ],
             ),
           ),

@@ -1,6 +1,7 @@
 import 'package:uuid/uuid.dart';
 import '../models/app_user.dart';
 import '../models/church.dart';
+import '../models/tenant_config.dart';
 import '../core/constants.dart';
 import 'local_db.dart';
 import 'tenant_context.dart';
@@ -110,7 +111,7 @@ class AuthService {
 
   // Login with email + password.
   // Uses the NestJS backend when API_BASE_URL is configured, otherwise local DB.
-  static Future<({AppUser user, Church? church})?> login(
+  static Future<({AppUser user, Church? church, TenantConfig? tenantConfig})?> login(
       String email, String password) async {
     if (await RateLimiter.isLocked(email)) {
       return null;
@@ -130,7 +131,7 @@ class AuthService {
           result.refreshToken,
         );
         await RateLimiter.clearAttempts(email);
-        return (user: result.user, church: result.church);
+        return (user: result.user, church: result.church, tenantConfig: result.tenantConfig);
       } on ApiException catch (e) {
         if (e.statusCode == 401) {
           await RateLimiter.recordFailure(email);
@@ -143,7 +144,7 @@ class AuthService {
     return _loginLocal(email, password);
   }
 
-  static Future<({AppUser user, Church? church})?> _loginLocal(
+  static Future<({AppUser user, Church? church, TenantConfig? tenantConfig})?> _loginLocal(
       String email, String password) async {
     final result = await LocalDb.getUserByEmailAcrossChurches(email);
     if (result == null) {
@@ -176,7 +177,7 @@ class AuthService {
         action: 'login',
         resource: 'auth',
       );
-      return (user: user, church: null);
+      return (user: user, church: null, tenantConfig: null);
     }
 
     final church = LocalDb.getChurchById(result.churchId);
@@ -191,7 +192,7 @@ class AuthService {
       action: 'login',
       resource: 'auth',
     );
-    return (user: user, church: church);
+    return (user: user, church: church, tenantConfig: null);
   }
 
   static Future<void> _persistRemoteSession(

@@ -60,6 +60,9 @@ class SuperAdminNotifier extends StateNotifier<SuperAdminState> {
     String? subscriptionTier,
     String? subscriptionExpiry,
     List<String>? enabledModules,
+    String? adminName,
+    String? adminEmail,
+    String? adminPassword,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -76,7 +79,25 @@ class SuperAdminNotifier extends StateNotifier<SuperAdminState> {
         if (subscriptionExpiry != null) 'subscriptionExpiry': subscriptionExpiry,
         if (enabledModules != null) 'enabledModules': enabledModules,
       };
-      await ApiClient().post('/tenants', body);
+      final tenantResp = await ApiClient().post('/tenants', body);
+      final tenant = TenantConfig.fromJson(tenantResp);
+
+      // Create admin user for the new church if credentials provided
+      if (adminName != null &&
+          adminName.isNotEmpty &&
+          adminEmail != null &&
+          adminEmail.isNotEmpty &&
+          adminPassword != null &&
+          adminPassword.isNotEmpty) {
+        await ApiClient().post('/auth/register', {
+          'name': adminName,
+          'email': adminEmail,
+          'password': adminPassword,
+          'role': 'church_admin',
+          'tenantId': tenant.id,
+        });
+      }
+
       await loadTenants();
       return null;
     } catch (e) {
