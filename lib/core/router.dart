@@ -6,7 +6,6 @@ import '../providers/auth_provider.dart';
 import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/setup_screen.dart';
-import '../screens/landing/landing_page.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/super_admin/super_admin_dashboard.dart';
 import '../screens/members/members_screen.dart';
@@ -81,20 +80,17 @@ class _RouterNotifier extends ChangeNotifier {
     final appState = _ref.read(appStateProvider);
     final loc = state.matchedLocation;
 
-    // Landing page is always public
-    if (loc == '/landing') return null;
-
     switch (appState.initState) {
       case AppInitState.loading:
         return loc == '/' ? null : '/';
       case AppInitState.needsSetup:
-        if (loc == '/login' || loc == '/setup' || loc == '/landing') return null;
-        return '/landing';
+        if (loc == '/login' || loc == '/setup') return null;
+        return '/login';
       case AppInitState.unauthenticated:
-        if (loc == '/login' || loc == '/landing') return null;
-        return '/landing';
+        if (loc == '/login') return null;
+        return '/login';
       case AppInitState.authenticated:
-        if (loc == '/' || loc == '/login' || loc == '/setup' || loc == '/landing') {
+        if (loc == '/' || loc == '/login' || loc == '/setup') {
           return '/home';
         }
         return null;
@@ -112,7 +108,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/setup', builder: (_, _) => const SetupScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      GoRoute(path: '/landing', builder: (_, _) => const LandingPage()),
       GoRoute(
         path: '/home',
         builder: (_, _) => const DashboardThemeWrapper(child: HomeScreen()),

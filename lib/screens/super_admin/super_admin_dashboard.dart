@@ -445,11 +445,9 @@ class _TenantCard extends StatelessWidget {
                 Wrap(
                   spacing: 6,
                   children: tenant.enabledModules
-                      .map((m) => Chip(
+                      .map<Widget>((m) => Chip(
                             label: Text(m,
                                 style: GoogleFonts.poppins(fontSize: 11)),
-                            materialTapTargetMaterial:
-                                MaterialTapTargetMaterial.purple,
                             visualDensity: VisualDensity.compact,
                           ))
                       .toList(),
