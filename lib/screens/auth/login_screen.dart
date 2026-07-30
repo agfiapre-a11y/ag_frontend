@@ -241,14 +241,109 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: CustomScrollView(
         controller: _scrollController,
         slivers: [
+          _buildNavBar(isMobile),
           _buildHeroSection(isMobile),
           _buildStatsSection(isMobile),
           _buildAboutSection(isMobile),
+          _buildStrategySection(isMobile),
           _buildChurchesSection(isMobile),
-          _buildCallToAction(isMobile),
+          _buildLegacySection(isMobile),
+          _buildContactSection(isMobile),
           _buildFooterSliver(isMobile),
         ],
       ),
+    );
+  }
+
+  // ── Navigation Bar ────────────────────────────────────────────────────────
+  SliverToBoxAdapter _buildNavBar(bool isMobile) {
+    return SliverToBoxAdapter(
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF0B1D3A),
+          border: Border(
+            bottom: BorderSide(
+              color: Colors.white.withValues(alpha: 0.06),
+              width: 1,
+            ),
+          ),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 20 : 80,
+          vertical: 14,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.secondary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.church, color: Color(0xFF0B1D3A), size: 24),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Assemblies of God',
+                    style: GoogleFonts.poppins(
+                        fontSize: isMobile ? 14 : 17,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+                Text('Ghana · #ShiftGrowTransform',
+                    style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: AppColors.secondary,
+                        fontWeight: FontWeight.w500)),
+              ],
+            ),
+            const Spacer(),
+            if (!isMobile) ...[
+              _navLink('About', () => _scrollTo(200)),
+              const SizedBox(width: 28),
+              _navLink('Strategy', () => _scrollTo(400)),
+              const SizedBox(width: 28),
+              _navLink('Churches', () => _scrollTo(600)),
+              const SizedBox(width: 28),
+              _navLink('Contact', () => _scrollTo(800)),
+              const SizedBox(width: 28),
+            ],
+            ElevatedButton(
+              onPressed: _openPortal,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.secondary,
+                foregroundColor: const Color(0xFF0B1D3A),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text('Sign In',
+                  style: GoogleFonts.poppins(
+                      fontSize: 13, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _navLink(String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Text(label,
+          style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.7),
+              fontWeight: FontWeight.w500)),
+    );
+  }
+
+  void _scrollTo(double offset) {
+    _scrollController.animateTo(
+      offset,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
     );
   }
 
@@ -258,15 +353,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       child: Stack(
         children: [
           Container(
-            height: isMobile ? 480 : 620,
-            decoration: BoxDecoration(
+            height: isMobile ? 520 : 680,
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  AppColors.primary,
-                  AppColors.primary.withValues(alpha: 0.85),
-                  const Color(0xFF1B5E20),
+                  Color(0xFF0B1D3A),
+                  Color(0xFF112D5C),
+                  Color(0xFF0B1D3A),
                 ],
               ),
             ),
@@ -274,11 +369,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: [
                 Positioned.fill(
                   child: Opacity(
-                    opacity: 0.1,
+                    opacity: 0.08,
                     child: Image.asset(
                       'assets/images/banner2.png',
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(),
+                      errorBuilder: (_, _, _) => const SizedBox(),
                     ),
                   ),
                 ),
@@ -286,113 +381,104 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Padding(
                     padding: EdgeInsets.symmetric(
                       horizontal: isMobile ? 24 : 80,
-                      vertical: isMobile ? 20 : 40,
+                      vertical: isMobile ? 30 : 60,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.church,
-                                  color: Colors.white, size: 28),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Paradise AG',
-                              style: GoogleFonts.poppins(
-                                fontSize: isMobile ? 18 : 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const Spacer(),
-                            if (!isMobile)
-                              TextButton(
-                                onPressed: _openPortal,
-                                child: Text('Sign In',
-                                    style: GoogleFonts.poppins(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600)),
-                              ),
-                          ],
-                        ),
                         const Spacer(),
                         Container(
-                          constraints: BoxConstraints(
-                              maxWidth: isMobile ? double.infinity : 600),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.secondary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                'The General Council of the Assemblies of God, Ghana',
-                                style: GoogleFonts.poppins(
-                                  fontSize: isMobile ? 24 : 40,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  height: 1.2,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Reflecting Christ, Transforming Lives — A Pentecostal movement committed to evangelism, discipleship, and community impact across Ghana and beyond.',
-                                style: GoogleFonts.poppins(
-                                  fontSize: isMobile ? 14 : 17,
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  height: 1.5,
-                                ),
-                              ),
-                              const SizedBox(height: 28),
-                              Row(
-                                children: [
-                                  ElevatedButton(
-                                    onPressed: _openPortal,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.secondary,
-                                      foregroundColor: Colors.black87,
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: isMobile ? 24 : 36,
-                                        vertical: isMobile ? 12 : 16,
-                                      ),
-                                    ),
-                                    child: Text('Get Started',
-                                        style: GoogleFonts.poppins(
-                                            fontSize: isMobile ? 14 : 16,
-                                            fontWeight: FontWeight.w600)),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  OutlinedButton(
-                                    onPressed: () {
-                                      _scrollController.animateTo(
-                                        _scrollController.position.maxScrollExtent * 0.5,
-                                        duration: const Duration(milliseconds: 500),
-                                        curve: Curves.easeInOut,
-                                      );
-                                    },
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: Colors.white,
-                                      side: const BorderSide(
-                                          color: Colors.white70),
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: isMobile ? 20 : 32,
-                                        vertical: isMobile ? 12 : 16,
-                                      ),
-                                    ),
-                                    child: Text('Find a Church',
-                                        style: GoogleFonts.poppins(
-                                            fontSize: isMobile ? 14 : 16)),
-                                  ),
-                                ],
-                              ),
+                              Icon(Icons.auto_awesome, color: AppColors.secondary, size: 14),
+                              const SizedBox(width: 8),
+                              Text('2026 THEME · THE FAITH OF OUR FATHERS',
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      color: AppColors.secondary,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 1.5)),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Assemblies of God,\nGhana',
+                          style: GoogleFonts.poppins(
+                            fontSize: isMobile ? 32 : 56,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          constraints: BoxConstraints(maxWidth: isMobile ? double.infinity : 580),
+                          child: Text(
+                            'A dynamic Pentecostal church dedicated to embracing the entirety of the Gospel. We are committed to evangelism, missions, fervent prayer, social action, and nurturing fellowship.',
+                            style: GoogleFonts.poppins(
+                              fontSize: isMobile ? 14 : 17,
+                              color: Colors.white.withValues(alpha: 0.75),
+                              height: 1.6,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        Row(
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: _openPortal,
+                              icon: const Icon(Icons.login, size: 18),
+                              label: Text('Access Portal',
+                                  style: GoogleFonts.poppins(
+                                      fontSize: isMobile ? 13 : 15,
+                                      fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.secondary,
+                                foregroundColor: const Color(0xFF0B1D3A),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isMobile ? 24 : 36,
+                                  vertical: isMobile ? 12 : 16,
+                                ),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            OutlinedButton(
+                              onPressed: () => _scrollTo(600),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isMobile ? 20 : 32,
+                                  vertical: isMobile ? 12 : 16,
+                                ),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              child: Text('Find a Church',
+                                  style: GoogleFonts.poppins(
+                                      fontSize: isMobile ? 13 : 15)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 40),
+                        Row(
+                          children: [
+                            _socialIcon(Icons.language, 'Website'),
+                            const SizedBox(width: 20),
+                            _socialIcon(Icons.facebook, 'Facebook'),
+                            const SizedBox(width: 20),
+                            _socialIcon(Icons.play_circle_filled, 'YouTube'),
+                          ],
+                        ),
+                        const Spacer(),
                       ],
                     ),
                   ),
@@ -405,7 +491,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  // ── Stats Section ─────────────────────────────────────────────────────────
+  Widget _socialIcon(IconData icon, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: Colors.white.withValues(alpha: 0.5), size: 18),
+        const SizedBox(width: 6),
+        Text(label,
+            style: GoogleFonts.poppins(
+                fontSize: 11, color: Colors.white.withValues(alpha: 0.5))),
+      ],
+    );
+  }
+
+  // ── Stats Band ────────────────────────────────────────────────────────────
   SliverToBoxAdapter _buildStatsSection(bool isMobile) {
     final stats = [
       _StatData(icon: Icons.church, value: '6,000+', label: 'Local Churches'),
@@ -420,12 +519,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           horizontal: isMobile ? 24 : 80,
           vertical: isMobile ? 32 : 48,
         ),
-        color: const Color(0xFFF5F5F0),
+        color: Colors.white,
         child: isMobile
             ? Column(
                 children: stats
                     .map((s) => Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.only(bottom: 12),
                           child: _StatCard(stat: s),
                         ))
                     .toList(),
@@ -451,39 +550,234 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: isMobile ? 24 : 80,
-          vertical: isMobile ? 40 : 64,
+          vertical: isMobile ? 48 : 80,
         ),
+        color: const Color(0xFFF7F6F2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('About Assemblies of God, Ghana',
-                style: GoogleFonts.poppins(
-                    fontSize: isMobile ? 22 : 30,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1B5E20))),
-            const SizedBox(height: 8),
-            Text(
-                'A Pentecostal fellowship devoted to reflecting Christ and transforming lives',
-                style: GoogleFonts.poppins(
-                    fontSize: isMobile ? 13 : 15, color: Colors.grey[600])),
-            const SizedBox(height: 32),
-            Text(
-              'The Assemblies of God, Ghana is a vibrant Pentecostal movement with a rich history of evangelism, discipleship, and community transformation. Founded with a vision to reach every corner of Ghana with the Gospel, the church has grown from humble beginnings to become one of the largest Protestant denominations in the country.',
-              style: GoogleFonts.poppins(
-                  fontSize: isMobile ? 13 : 15,
-                  color: Colors.grey[700],
-                  height: 1.7),
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text('WHO WE ARE',
+                    style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondary,
+                        letterSpacing: 2)),
+              ],
             ),
             const SizedBox(height: 16),
-            Text(
-              'With over 6,000 local churches across 16 regions, the Assemblies of God, Ghana is committed to planting churches, training leaders, and serving communities through education, healthcare, and social outreach programs.',
-              style: GoogleFonts.poppins(
-                  fontSize: isMobile ? 13 : 15,
-                  color: Colors.grey[700],
-                  height: 1.7),
+            Text('All The Gospel',
+                style: GoogleFonts.poppins(
+                    fontSize: isMobile ? 26 : 38,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0B1D3A))),
+            const SizedBox(height: 20),
+            Container(
+              constraints: BoxConstraints(maxWidth: 720),
+              child: Text(
+                'Assemblies of God, Ghana is a dynamic Pentecostal church dedicated to embracing the entirety of the Gospel. Committed to the belief in the divine Word of God, the church actively engages in evangelism, missions, fervent prayer, social action interventions and nurturing fellowship.',
+                style: GoogleFonts.poppins(
+                    fontSize: isMobile ? 14 : 16,
+                    color: Colors.grey[700],
+                    height: 1.8),
+              ),
             ),
+            const SizedBox(height: 32),
+            isMobile
+                ? Column(
+                    children: [
+                      _aboutValueCard(Icons.flag, 'Evangelism', 'Reaching every corner of Ghana with the Gospel of Jesus Christ.'),
+                      const SizedBox(height: 12),
+                      _aboutValueCard(Icons.public, 'Missions', 'Sending laborers into the harvest field, both locally and internationally.'),
+                      const SizedBox(height: 12),
+                      _aboutValueCard(Icons.volunteer_activism, 'Social Action', 'Serving communities through education, healthcare, and outreach.'),
+                      const SizedBox(height: 12),
+                      _aboutValueCard(Icons.groups, 'Fellowship', 'Nurturing believers in a Christ-centered community of faith.'),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: _aboutValueCard(Icons.flag, 'Evangelism', 'Reaching every corner of Ghana with the Gospel.')),
+                      const SizedBox(width: 16),
+                      Expanded(child: _aboutValueCard(Icons.public, 'Missions', 'Sending laborers into the harvest field.')),
+                      const SizedBox(width: 16),
+                      Expanded(child: _aboutValueCard(Icons.volunteer_activism, 'Social Action', 'Serving communities through outreach.')),
+                      const SizedBox(width: 16),
+                      Expanded(child: _aboutValueCard(Icons.groups, 'Fellowship', 'Nurturing believers in Christ-centered community.')),
+                    ],
+                  ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _aboutValueCard(IconData icon, String title, String desc) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B1D3A),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppColors.secondary, size: 22),
+          ),
+          const SizedBox(height: 14),
+          Text(title,
+              style: GoogleFonts.poppins(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF0B1D3A))),
+          const SizedBox(height: 6),
+          Text(desc,
+              style: GoogleFonts.poppins(
+                  fontSize: 12, color: Colors.grey[600], height: 1.5)),
+        ],
+      ),
+    );
+  }
+
+  // ── Strategy Section (Six Rs) ──────────────────────────────────────────────
+  SliverToBoxAdapter _buildStrategySection(bool isMobile) {
+    final strategies = [
+      _StrategyData(icon: Icons.campaign, title: 'Reach', desc: 'Evangelize the lost and plant new churches across Ghana.'),
+      _StrategyData(icon: Icons.construction, title: 'Rebuild', desc: 'Strengthen existing churches and restore fading congregations.'),
+      _StrategyData(icon: Icons.healing, title: 'Restore', desc: 'Restore broken lives through prayer, counseling, and care.'),
+      _StrategyData(icon: Icons.school, title: 'Reform', desc: 'Disciple believers in sound doctrine and holy living.'),
+      _StrategyData(icon: Icons.trending_up, title: 'Reposition', desc: 'Position the church for greater impact and influence.'),
+      _StrategyData(icon: Icons.auto_awesome, title: 'Rebrand', desc: 'Refresh our identity while honoring our Pentecostal heritage.'),
+    ];
+
+    return SliverToBoxAdapter(
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 24 : 80,
+          vertical: isMobile ? 48 : 80,
+        ),
+        color: const Color(0xFF0B1D3A),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text('TRANSFORMATION AGENDA',
+                    style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondary,
+                        letterSpacing: 2)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('The Six Rs Strategy',
+                style: GoogleFonts.poppins(
+                    fontSize: isMobile ? 24 : 36,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white)),
+            const SizedBox(height: 12),
+            Container(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: Text(
+                'Anchored on Micah 4:1, the Transformation Agenda calls us to Shift, Grow, and Transform the church through six strategic pillars.',
+                style: GoogleFonts.poppins(
+                    fontSize: isMobile ? 13 : 15,
+                    color: Colors.white.withValues(alpha: 0.6),
+                    height: 1.6),
+              ),
+            ),
+            const SizedBox(height: 40),
+            isMobile
+                ? Column(
+                    children: strategies
+                        .map((s) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _strategyCard(s, true),
+                            ))
+                        .toList(),
+                  )
+                : Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: strategies
+                        .map((s) => SizedBox(
+                              width: 340,
+                              child: _strategyCard(s, false),
+                            ))
+                        .toList(),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _strategyCard(_StrategyData s, bool isMobile) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(s.icon, color: AppColors.secondary, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(s.title,
+                    style: GoogleFonts.poppins(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white)),
+                const SizedBox(height: 6),
+                Text(s.desc,
+                    style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.white.withValues(alpha: 0.55),
+                        height: 1.5)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -494,36 +788,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: isMobile ? 24 : 80,
-          vertical: isMobile ? 40 : 64,
+          vertical: isMobile ? 48 : 80,
         ),
-        color: const Color(0xFFF5F5F0),
+        color: const Color(0xFFF7F6F2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text('DIRECTORY',
+                    style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondary,
+                        letterSpacing: 2)),
+              ],
+            ),
+            const SizedBox(height: 16),
             Text('Find Your Church',
                 style: GoogleFonts.poppins(
-                    fontSize: isMobile ? 22 : 30,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1B5E20))),
-            const SizedBox(height: 8),
+                    fontSize: isMobile ? 24 : 36,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0B1D3A))),
+            const SizedBox(height: 12),
             Text(
-                'Browse churches on the Paradise AG platform. Click to visit a church portal.',
+                'Browse churches on the Paradise AG platform. Click a church to access its portal.',
                 style: GoogleFonts.poppins(
                     fontSize: isMobile ? 13 : 15, color: Colors.grey[600])),
-            const SizedBox(height: 32),
+            const SizedBox(height: 40),
             if (_loadingChurches)
               const Center(
                 child: Padding(
-                  padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator(color: AppColors.primary),
+                  padding: EdgeInsets.all(60),
+                  child: CircularProgressIndicator(color: Color(0xFF0B1D3A)),
                 ),
               )
             else if (_churches.isEmpty)
               Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(40),
+                  padding: const EdgeInsets.all(60),
                   child: Text('No churches found.',
-                      style: GoogleFonts.poppins(color: Colors.grey[600])),
+                      style: GoogleFonts.poppins(color: Colors.grey[500])),
                 ),
               )
             else
@@ -552,61 +866,86 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  // ── Call To Action ────────────────────────────────────────────────────────
-  SliverToBoxAdapter _buildCallToAction(bool isMobile) {
+  // ── Legacy Temple Project CTA ──────────────────────────────────────────────
+  SliverToBoxAdapter _buildLegacySection(bool isMobile) {
     return SliverToBoxAdapter(
       child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: isMobile ? 24 : 80,
           vertical: isMobile ? 48 : 72,
         ),
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              AppColors.primary,
-              const Color(0xFF1B5E20),
+              Color(0xFF112D5C),
+              Color(0xFF0B1D3A),
             ],
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.secondary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+              ),
+              child: Text('LEGACY TEMPLE PROJECT',
+                  style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: AppColors.secondary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.5)),
+            ),
+            const SizedBox(height: 24),
             Text(
-              'Join Our Community',
+              'Build a House for God',
               style: GoogleFonts.poppins(
-                fontSize: isMobile ? 24 : 36,
-                fontWeight: FontWeight.bold,
+                fontSize: isMobile ? 24 : 38,
+                fontWeight: FontWeight.w800,
                 color: Colors.white,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Whether you\'re looking for a church home, seeking to grow in your faith, or wanting to serve your community, there\'s a place for you in the Assemblies of God family.',
-              style: GoogleFonts.poppins(
-                fontSize: isMobile ? 14 : 16,
-                color: Colors.white.withValues(alpha: 0.9),
-                height: 1.6,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton(
-              onPressed: _openPortal,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.secondary,
-                foregroundColor: Colors.black87,
-                padding: EdgeInsets.symmetric(
-                  horizontal: isMobile ? 32 : 48,
-                  vertical: isMobile ? 14 : 18,
+            const SizedBox(height: 16),
+            Container(
+              constraints: const BoxConstraints(maxWidth: 580),
+              child: Text(
+                'The Legacy Temple Project Commission is on a mission to provide every Assemblies of God church with a dignified place of worship. Partner with us to make this vision a reality.',
+                style: GoogleFonts.poppins(
+                  fontSize: isMobile ? 14 : 16,
+                  color: Colors.white.withValues(alpha: 0.7),
+                  height: 1.6,
                 ),
+                textAlign: TextAlign.center,
               ),
-              child: Text('Sign In to Your Church',
-                  style: GoogleFonts.poppins(
-                      fontSize: isMobile ? 15 : 17,
-                      fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 32),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _openPortal,
+                  icon: const Icon(Icons.favorite, size: 18),
+                  label: Text('Give to the Project',
+                      style: GoogleFonts.poppins(
+                          fontSize: isMobile ? 14 : 16,
+                          fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.secondary,
+                    foregroundColor: const Color(0xFF0B1D3A),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 28 : 40,
+                      vertical: isMobile ? 14 : 18,
+                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -614,44 +953,217 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  // ── Footer (Sliver version for home view) ─────────────────────────────────
+  // ── Contact Section ────────────────────────────────────────────────────────
+  SliverToBoxAdapter _buildContactSection(bool isMobile) {
+    return SliverToBoxAdapter(
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 24 : 80,
+          vertical: isMobile ? 40 : 64,
+        ),
+        color: Colors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Contact Us',
+                style: GoogleFonts.poppins(
+                    fontSize: isMobile ? 20 : 28,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0B1D3A))),
+            const SizedBox(height: 32),
+            isMobile
+                ? Column(
+                    children: [
+                      _contactItem(Icons.location_on, 'The Head Office',
+                          'P.O. Box AN 7644, Accra-North, Ghana\nDigital Address: GA-031-9533\nGamel Abdul Naser Rd'),
+                      const SizedBox(height: 20),
+                      _contactItem(Icons.phone, 'Phone',
+                          '0302 788 583\n0302 788 588'),
+                      const SizedBox(height: 20),
+                      _contactItem(Icons.email, 'Email',
+                          'agghanagc@gmail.com'),
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _contactItem(Icons.location_on, 'The Head Office',
+                          'P.O. Box AN 7644, Accra-North, Ghana\nDigital Address: GA-031-9533\nGamel Abdul Naser Rd')),
+                      const SizedBox(width: 32),
+                      Expanded(child: _contactItem(Icons.phone, 'Phone',
+                          '0302 788 583\n0302 788 588')),
+                      const SizedBox(width: 32),
+                      Expanded(child: _contactItem(Icons.email, 'Email',
+                          'agghanagc@gmail.com')),
+                    ],
+                  ),
+            const SizedBox(height: 32),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _socialChip(Icons.language, 'Website'),
+                _socialChip(Icons.facebook, 'Facebook'),
+                _socialChip(Icons.play_circle_filled, 'YouTube'),
+                _socialChip(Icons.camera_alt, 'Instagram'),
+                _socialChip(Icons.alternate_email, 'Twitter'),
+                _socialChip(Icons.business_center, 'LinkedIn'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _contactItem(IconData icon, String title, String detail) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B1D3A).withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: const Color(0xFF0B1D3A), size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF0B1D3A))),
+              const SizedBox(height: 4),
+              Text(detail,
+                  style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      height: 1.6)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _socialChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B1D3A).withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF0B1D3A).withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFF0B1D3A)),
+          const SizedBox(width: 6),
+          Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: const Color(0xFF0B1D3A),
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  // ── Footer ─────────────────────────────────────────────────────────────────
   SliverToBoxAdapter _buildFooterSliver(bool isMobile) {
     return SliverToBoxAdapter(
       child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: isMobile ? 24 : 80,
-          vertical: 32,
+          vertical: 40,
         ),
-        color: const Color(0xFF1B3A1B),
+        color: const Color(0xFF0B1D3A),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Paradise AG — Church Information Management System',
-              style: GoogleFonts.poppins(
-                  fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.church, color: Color(0xFF0B1D3A), size: 20),
+                ),
+                const SizedBox(width: 10),
+                Text('Assemblies of God, Ghana',
+                    style: GoogleFonts.poppins(
+                        fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Designed by Echendaa Educational and Research Unit',
-              style: GoogleFonts.poppins(
-                  fontSize: 11, color: Colors.white.withValues(alpha: 0.6)),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Distributed by Nung A Bibile Foundation under the Digital Literacy Program',
-              style: GoogleFonts.poppins(
-                  fontSize: 11, color: Colors.white.withValues(alpha: 0.5)),
-            ),
+            const SizedBox(height: 20),
+            isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _footerCol('Platform', ['About Us', 'Leadership', 'Locations', 'News & Updates']),
+                      const SizedBox(height: 20),
+                      _footerCol('Ministries', ['Agencies', 'Departments', 'Missions', 'Associations']),
+                      const SizedBox(height: 20),
+                      _footerCol('Resources', ['Legacy Temple Project', 'Give', 'Contact Us']),
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 2, child: _footerCol('Platform', ['About Us', 'Leadership', 'Locations', 'News & Updates'])),
+                      const SizedBox(width: 40),
+                      Expanded(flex: 2, child: _footerCol('Ministries', ['Agencies', 'Departments', 'Missions', 'Associations'])),
+                      const SizedBox(width: 40),
+                      Expanded(flex: 2, child: _footerCol('Resources', ['Legacy Temple Project', 'Give', 'Contact Us'])),
+                    ],
+                  ),
+            const SizedBox(height: 32),
+            const Divider(color: Colors.white24),
             const SizedBox(height: 16),
             Text(
               '© ${DateTime.now().year} Assemblies of God, Ghana. All rights reserved.',
               style: GoogleFonts.poppins(
-                  fontSize: 10, color: Colors.white.withValues(alpha: 0.4)),
+                  fontSize: 11, color: Colors.white.withValues(alpha: 0.4)),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Paradise AG — Church Information Management System\nDesigned by Echendaa Educational and Research Unit · Distributed by Nung A Bibile Foundation',
+              style: GoogleFonts.poppins(
+                  fontSize: 10, color: Colors.white.withValues(alpha: 0.3), height: 1.5),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _footerCol(String title, List<String> links) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: 0.5)),
+        const SizedBox(height: 12),
+        ...links.map((l) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(l,
+                  style: GoogleFonts.poppins(
+                      fontSize: 12, color: Colors.white.withValues(alpha: 0.45))),
+            )),
+      ],
     );
   }
 
@@ -889,6 +1401,13 @@ class _StatData {
   _StatData({required this.icon, required this.value, required this.label});
 }
 
+class _StrategyData {
+  final IconData icon;
+  final String title;
+  final String desc;
+  _StrategyData({required this.icon, required this.title, required this.desc});
+}
+
 class _StatCard extends StatelessWidget {
   final _StatData stat;
   const _StatCard({required this.stat});
@@ -916,7 +1435,7 @@ class _StatCard extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(stat.icon, color: AppColors.primary, size: 24),
+            child: Icon(stat.icon, color: const Color(0xFF0B1D3A), size: 24),
           ),
           const SizedBox(width: 16),
           Column(
@@ -926,7 +1445,7 @@ class _StatCard extends StatelessWidget {
                   style: GoogleFonts.poppins(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF1B5E20))),
+                      color: const Color(0xFF0B1D3A))),
               Text(stat.label,
                   style: GoogleFonts.poppins(
                       fontSize: 12, color: Colors.grey[600])),
@@ -946,7 +1465,7 @@ class _ChurchCard extends StatelessWidget {
 
   Color get _primaryColor {
     final hex = tenant.primaryColor.replaceAll('#', '');
-    if (hex.length != 6) return AppColors.primary;
+    if (hex.length != 6) return const Color(0xFF0B1D3A);
     return Color(int.parse('FF$hex', radix: 16));
   }
 
@@ -1022,7 +1541,7 @@ class _ChurchCard extends StatelessWidget {
                                   style: GoogleFonts.poppins(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF1B5E20)),
+                                      color: const Color(0xFF0B1D3A)),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis),
                               if (tenant.motto != null)
