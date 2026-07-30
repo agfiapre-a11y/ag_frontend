@@ -62,19 +62,23 @@ class AppStateNotifier extends StateNotifier<AppState> {
     if (await RateLimiter.isLocked(email)) {
       return 'Too many failed attempts. Account locked for 15 minutes.';
     }
-    final result = await AuthService.login(email, password);
-    if (result == null) {
-      final remaining = await RateLimiter.getRemainingAttempts(email);
-      if (remaining < 5) {
-        return 'Invalid email or password. $remaining attempt(s) remaining.';
+    try {
+      final result = await AuthService.login(email, password);
+      if (result == null) {
+        final remaining = await RateLimiter.getRemainingAttempts(email);
+        if (remaining < 5) {
+          return 'Invalid email or password. $remaining attempt(s) remaining.';
+        }
+        return 'Invalid email or password.';
       }
-      return 'Invalid email or password.';
+      state = AppState(
+          initState: AppInitState.authenticated,
+          user: result.user,
+          church: result.church);
+      return null;
+    } catch (e) {
+      return 'Login failed: $e';
     }
-    state = AppState(
-        initState: AppInitState.authenticated,
-        user: result.user,
-        church: result.church);
-    return null;
   }
 
   Future<void> setupChurch({

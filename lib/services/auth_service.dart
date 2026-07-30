@@ -10,6 +10,7 @@ import 'session_manager.dart';
 import 'audit_service.dart';
 import 'movement_classifier.dart';
 import 'api_config.dart';
+import 'api_client.dart';
 import 'remote_auth_service.dart';
 import 'auth_token_manager.dart';
 
@@ -130,9 +131,12 @@ class AuthService {
         );
         await RateLimiter.clearAttempts(email);
         return (user: result.user, church: result.church);
-      } catch (_) {
-        await RateLimiter.recordFailure(email);
-        return null;
+      } on ApiException catch (e) {
+        if (e.statusCode == 401) {
+          await RateLimiter.recordFailure(email);
+          return null;
+        }
+        rethrow;
       }
     }
 

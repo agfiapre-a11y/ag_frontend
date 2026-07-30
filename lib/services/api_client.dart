@@ -55,31 +55,31 @@ class ApiClient {
     late final http.Response response;
     switch (method.toUpperCase()) {
       case 'GET':
-        response = await http.get(uri, headers: headers);
+        response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 60));
         break;
       case 'POST':
         response = await http.post(
           uri,
           headers: headers,
           body: body == null ? null : jsonEncode(body),
-        );
+        ).timeout(const Duration(seconds: 60));
         break;
       case 'PUT':
         response = await http.put(
           uri,
           headers: headers,
           body: body == null ? null : jsonEncode(body),
-        );
+        ).timeout(const Duration(seconds: 60));
         break;
       case 'PATCH':
         response = await http.patch(
           uri,
           headers: headers,
           body: body == null ? null : jsonEncode(body),
-        );
+        ).timeout(const Duration(seconds: 60));
         break;
       case 'DELETE':
-        response = await http.delete(uri, headers: headers);
+        response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 60));
         break;
       default:
         throw UnsupportedError('HTTP method $method not supported');
@@ -110,7 +110,7 @@ class ApiClient {
     if (_tenantId != null) {
       headers['X-Tenant-Id'] = _tenantId!;
     }
-    final response = await http.get(uri, headers: headers);
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 60));
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return [];
       final decoded = jsonDecode(response.body);
