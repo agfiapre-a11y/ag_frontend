@@ -921,6 +921,7 @@ class _DashboardScaffold extends StatelessWidget {
   final String roleLabel;
   final Future<void> Function()? onRefresh;
   final List<Widget> children;
+  final Color? primaryColor;
 
   const _DashboardScaffold({
     required this.user,
@@ -928,6 +929,7 @@ class _DashboardScaffold extends StatelessWidget {
     required this.roleLabel,
     required this.children,
     this.onRefresh,
+    this.primaryColor,
   });
 
   @override
@@ -935,6 +937,7 @@ class _DashboardScaffold extends StatelessWidget {
     return ResponsiveScaffold(
       appBar: AppBar(
         title: Text(appBarTitle),
+        backgroundColor: primaryColor,
         actions: [_HeaderActions(user: user)],
       ),
       body: RefreshIndicator(
@@ -954,6 +957,13 @@ class _DashboardScaffold extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Parses a hex color string (e.g. '#2E7D32') to a [Color], or returns [fallback].
+Color? _parseHexColor(String hex, Color? fallback) {
+  final cleaned = hex.replaceAll('#', '');
+  if (cleaned.length != 6) return fallback;
+  return Color(int.parse('FF$cleaned', radix: 16));
 }
 
 /// Formats a double as a simple currency string.
@@ -1560,10 +1570,16 @@ class _LocalChurchAdminHome extends ConsumerWidget {
         ? allActions
         : allActions.where((a) => a.module == null || tenantConfig.hasModule(a.module!)).toList();
 
+    final tenantPrimaryColor = tenantConfig != null
+        ? _parseHexColor(tenantConfig.primaryColor, null)
+        : null;
+    final churchName = tenantConfig?.name ?? 'Church';
+
     return _DashboardScaffold(
       user: user,
-      appBarTitle: 'Church Dashboard',
+      appBarTitle: '$churchName Dashboard',
       roleLabel: 'Local Church Administrator',
+      primaryColor: tenantPrimaryColor,
       onRefresh: () async {
         ref.read(memberProvider.notifier).refresh();
         ref.read(departmentProvider.notifier).refresh();

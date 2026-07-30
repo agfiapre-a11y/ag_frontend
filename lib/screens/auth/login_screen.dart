@@ -24,10 +24,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _scrollController = ScrollController();
   bool _loading = false;
   bool _obscure = true;
-  String _view = 'home'; // 'home' = landing page, 'portal' = login form
+  String _view = 'home'; // 'home' = landing page, 'church_home' = per-church page, 'portal' = login form
 
   List<TenantConfig> _churches = [];
   bool _loadingChurches = true;
+  TenantConfig? _selectedChurch;
+  bool _loadingBranding = false;
 
   @override
   void initState() {
@@ -113,7 +115,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _goHome() {
-    setState(() => _view = 'home');
+    setState(() {
+      _view = 'home';
+      _selectedChurch = null;
+    });
+  }
+
+  Future<void> _selectChurch(TenantConfig church) async {
+    setState(() {
+      _loadingBranding = true;
+      _selectedChurch = church;
+    });
+
+    if (ApiConfig.isConfigured) {
+      try {
+        final uri = Uri.parse('${ApiConfig.baseUrl}/tenants/public/${church.slug}');
+        final response = await http.get(uri, headers: {'Content-Type': 'application/json'});
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          setState(() {
+            _selectedChurch = TenantConfig.fromJson(data);
+            _loadingBranding = false;
+          });
+        } else {
+          setState(() => _loadingBranding = false);
+        }
+      } catch (_) {
+        setState(() => _loadingBranding = false);
+      }
+    } else {
+      setState(() => _loadingBranding = false);
+    }
+
+    setState(() => _view = 'church_home');
+  }
+
+  void _openPortalForChurch() {
+    if (_selectedChurch != null) {
+      ref.read(tenantProvider.notifier).setConfig(_selectedChurch!);
+    }
+    setState(() => _view = 'portal');
   }
 
   @override
@@ -124,16 +165,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (_view == 'portal') {
       return _buildPortalView(context, isMobile);
     }
+    if (_view == 'church_home') {
+      return _buildChurchHomeView(context, isMobile);
+    }
     return _buildHomeView(context, isMobile);
   }
 
   // ── Portal View (Login Form) ──────────────────────────────────────────────
   Widget _buildPortalView(BuildContext context, bool isMobile) {
     final tenantConfig = ref.watch(tenantConfigProvider);
-    final appName = tenantConfig?.appName ?? tenantConfig?.name ?? 'Paradise AG';
+    final appName = tenantConfig?.appName ?? tenantConfig?.name ?? _selectedChurch?.name ?? 'Paradise AG';
     final screenWidth = MediaQuery.sizeOf(context).width;
     final horizontalPadding = screenWidth < 400 ? 16.0 : 24.0;
     final formMaxWidth = 525.0;
+    final portalPrimaryColor = tenantConfig != null
+        ? _parseColor(tenantConfig.primaryColor, AppColors.primary)
+        : (_selectedChurch != null
+            ? _parseColor(_selectedChurch!.primaryColor, AppColors.primary)
+            : AppColors.primary);
 
     return Scaffold(
       body: Container(
@@ -142,7 +191,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppColors.primary,
+              portalPrimaryColor,
               AppColors.backgroundLight,
               AppColors.background,
             ],
@@ -209,9 +258,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 Row(
                                   children: [
                                     TextButton.icon(
-                                      onPressed: _goHome,
+                                      onPressed: () {
+                                        if (_selectedChurch != null) {
+                                          setState(() => _view = 'church_home');
+                                        } else {
+                                          _goHome();
+                                        }
+                                      },
                                       icon: const Icon(Icons.arrow_back, size: 18),
-                                      label: Text('Home',
+                                      label: Text(_selectedChurch != null ? 'Church' : 'Home',
                                           style: GoogleFonts.poppins(fontSize: 13)),
                                     ),
                                     const Spacer(),
@@ -253,6 +308,565 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ],
       ),
     );
+  }
+
+  // ── Per-Church Branded Home View ──────────────────────────────────────────
+  Widget _buildChurchHomeView(BuildContext context, bool isMobile) {
+    if (_loadingBranding) {
+      return Scaffold(
+        body: Container(
+          color: const Color(0xFF0B1D3A),
+          child: const Center(
+            child: CircularProgressIndicator(color: AppColors.secondary),
+          ),
+        ),
+      );
+    }
+
+    final church = _selectedChurch!;
+    final primaryColor = _parseColor(church.primaryColor, const Color(0xFF0B1D3A));
+    final accentColor = _parseColor(church.secondaryColor, AppColors.secondary);
+    final churchName = church.name;
+    final motto = church.motto ?? 'Welcome to our church';
+    final aboutText = church.aboutText ?? 'A Christ-centered community dedicated to worship, fellowship, and service.';
+    final mission = church.mission ?? 'To make disciples of all nations, baptizing them in the name of the Father, Son, and Holy Spirit.';
+    final vision = church.vision ?? 'A vibrant church transforming lives through the power of the Gospel.';
+    final pastorMessage = church.pastorMessage;
+    final address = church.address ?? 'Contact the church office for directions';
+    final phone = church.phone;
+    final email = church.email;
+
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          // ── Church Nav Bar ──
+          SliverToBoxAdapter(
+            child: Container(
+              decoration: BoxDecoration(
+                color: primaryColor,
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    width: 1,
+                  ),
+                ),
+              ),
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 20 : 80,
+                vertical: 14,
+              ),
+              child: Row(
+                children: [
+                  _churchLogo(church, primaryColor, 44),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(churchName,
+                            style: GoogleFonts.poppins(
+                                fontSize: isMobile ? 14 : 17,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        if (motto.isNotEmpty)
+                          Text(motto,
+                              style: GoogleFonts.poppins(
+                                  fontSize: 10,
+                                  color: accentColor,
+                                  fontWeight: FontWeight.w500),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                  if (!isMobile) ...[
+                    TextButton(
+                      onPressed: () => _scrollTo(200),
+                      child: Text('About',
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontWeight: FontWeight.w500)),
+                    ),
+                    const SizedBox(width: 20),
+                    TextButton(
+                      onPressed: () => _scrollTo(500),
+                      child: Text('Mission',
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontWeight: FontWeight.w500)),
+                    ),
+                    const SizedBox(width: 20),
+                    TextButton(
+                      onPressed: () => _scrollTo(800),
+                      child: Text('Contact',
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontWeight: FontWeight.w500)),
+                    ),
+                    const SizedBox(width: 20),
+                  ],
+                  ElevatedButton(
+                    onPressed: _openPortalForChurch,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      foregroundColor: primaryColor,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Text('Sign In',
+                        style: GoogleFonts.poppins(
+                            fontSize: 13, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Church Hero ──
+          SliverToBoxAdapter(
+            child: Stack(
+              children: [
+                Container(
+                  height: isMobile ? 480 : 600,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        primaryColor,
+                        primaryColor.withValues(alpha: 0.85),
+                        primaryColor.withValues(alpha: 0.7),
+                      ],
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      if (church.bannerUrl != null)
+                        Positioned.fill(
+                          child: Opacity(
+                            opacity: 0.15,
+                            child: Image.network(
+                              church.bannerUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => const SizedBox(),
+                            ),
+                          ),
+                        ),
+                      SafeArea(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isMobile ? 24 : 80,
+                            vertical: isMobile ? 30 : 60,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: accentColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(30),
+                                  border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.church, color: accentColor, size: 14),
+                                    const SizedBox(width: 8),
+                                    Text(churchName.toUpperCase(),
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            color: accentColor,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 1.5)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              Text(
+                                'Welcome to\n$churchName',
+                                style: GoogleFonts.poppins(
+                                  fontSize: isMobile ? 30 : 52,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  height: 1.1,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Container(
+                                constraints: BoxConstraints(maxWidth: isMobile ? double.infinity : 560),
+                                child: Text(
+                                  aboutText,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: isMobile ? 14 : 17,
+                                    color: Colors.white.withValues(alpha: 0.75),
+                                    height: 1.6,
+                                  ),
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+                              Row(
+                                children: [
+                                  ElevatedButton.icon(
+                                    onPressed: _openPortalForChurch,
+                                    icon: const Icon(Icons.login, size: 18),
+                                    label: Text('Access Portal',
+                                        style: GoogleFonts.poppins(
+                                            fontSize: isMobile ? 13 : 15,
+                                            fontWeight: FontWeight.w600)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: accentColor,
+                                      foregroundColor: primaryColor,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isMobile ? 24 : 36,
+                                        vertical: isMobile ? 12 : 16,
+                                      ),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  OutlinedButton(
+                                    onPressed: () => _scrollTo(500),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.white,
+                                      side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isMobile ? 20 : 32,
+                                        vertical: isMobile ? 12 : 16,
+                                      ),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    child: Text('Learn More',
+                                        style: GoogleFonts.poppins(
+                                            fontSize: isMobile ? 13 : 15)),
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Church About / Mission / Vision ──
+          SliverToBoxAdapter(
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 24 : 80,
+                vertical: isMobile ? 48 : 80,
+              ),
+              color: const Color(0xFFF7F6F2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 4,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text('ABOUT US',
+                          style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: accentColor,
+                              letterSpacing: 2)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Who We Are',
+                      style: GoogleFonts.poppins(
+                          fontSize: isMobile ? 26 : 38,
+                          fontWeight: FontWeight.w800,
+                          color: primaryColor)),
+                  const SizedBox(height: 20),
+                  Container(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: Text(
+                      aboutText,
+                      style: GoogleFonts.poppins(
+                          fontSize: isMobile ? 14 : 16,
+                          color: Colors.grey[700],
+                          height: 1.8),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  isMobile
+                      ? Column(
+                          children: [
+                            _churchValueCard(Icons.flag, 'Our Mission', mission, accentColor),
+                            const SizedBox(height: 12),
+                            _churchValueCard(Icons.visibility, 'Our Vision', vision, accentColor),
+                            const SizedBox(height: 12),
+                            _churchValueCard(Icons.format_quote, 'Our Motto', '"$motto"', accentColor),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Expanded(child: _churchValueCard(Icons.flag, 'Our Mission', mission, accentColor)),
+                            const SizedBox(width: 16),
+                            Expanded(child: _churchValueCard(Icons.visibility, 'Our Vision', vision, accentColor)),
+                            const SizedBox(width: 16),
+                            Expanded(child: _churchValueCard(Icons.format_quote, 'Our Motto', '"$motto"', accentColor)),
+                          ],
+                        ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Pastor's Message (if available) ──
+          if (pastorMessage != null && pastorMessage.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 24 : 80,
+                  vertical: isMobile ? 40 : 64,
+                ),
+                color: primaryColor,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+                      ),
+                      child: Text("PASTOR'S MESSAGE",
+                          style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: accentColor,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.5)),
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      constraints: const BoxConstraints(maxWidth: 680),
+                      child: Text(
+                        '"$pastorMessage"',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: isMobile ? 16 : 20,
+                          color: Colors.white.withValues(alpha: 0.85),
+                          height: 1.7,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // ── Church Contact ──
+          SliverToBoxAdapter(
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 24 : 80,
+                vertical: isMobile ? 40 : 64,
+              ),
+              color: Colors.white,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Contact Us',
+                      style: GoogleFonts.poppins(
+                          fontSize: isMobile ? 20 : 28,
+                          fontWeight: FontWeight.w800,
+                          color: primaryColor)),
+                  const SizedBox(height: 32),
+                  isMobile
+                      ? Column(
+                          children: [
+                            _contactItem(Icons.location_on, 'Address', address),
+                            if (phone != null && phone.isNotEmpty) ...[
+                              const SizedBox(height: 20),
+                              _contactItem(Icons.phone, 'Phone', phone),
+                            ],
+                            if (email != null && email.isNotEmpty) ...[
+                              const SizedBox(height: 20),
+                              _contactItem(Icons.email, 'Email', email),
+                            ],
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: _contactItem(Icons.location_on, 'Address', address)),
+                            if (phone != null && phone.isNotEmpty) ...[
+                              const SizedBox(width: 32),
+                              Expanded(child: _contactItem(Icons.phone, 'Phone', phone)),
+                            ],
+                            if (email != null && email.isNotEmpty) ...[
+                              const SizedBox(width: 32),
+                              Expanded(child: _contactItem(Icons.email, 'Email', email)),
+                            ],
+                          ],
+                        ),
+                  const SizedBox(height: 24),
+                  // Social links
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      if (church.facebookUrl != null && church.facebookUrl!.isNotEmpty)
+                        _socialChip(Icons.facebook, 'Facebook'),
+                      if (church.instagramUrl != null && church.instagramUrl!.isNotEmpty)
+                        _socialChip(Icons.camera_alt, 'Instagram'),
+                      if (church.twitterUrl != null && church.twitterUrl!.isNotEmpty)
+                        _socialChip(Icons.alternate_email, 'Twitter'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Church Footer ──
+          SliverToBoxAdapter(
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 24 : 80,
+                vertical: 32,
+              ),
+              color: primaryColor,
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      _churchLogo(church, primaryColor, 36),
+                      const SizedBox(width: 10),
+                      Text(churchName,
+                          style: GoogleFonts.poppins(
+                              fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: _goHome,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.arrow_back, color: Colors.white70, size: 16),
+                            const SizedBox(width: 6),
+                            Text('All Churches',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 13, color: Colors.white70)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Divider(color: Colors.white24),
+                  const SizedBox(height: 12),
+                  Text(
+                    '© ${DateTime.now().year} $churchName · Paradise AG Platform',
+                    style: GoogleFonts.poppins(
+                        fontSize: 11, color: Colors.white.withValues(alpha: 0.4)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _churchLogo(TenantConfig church, Color fallbackColor, double size) {
+    if (church.logoUrl != null && church.logoUrl!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.network(
+          church.logoUrl!,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => _churchLogoPlaceholder(church, fallbackColor, size),
+        ),
+      );
+    }
+    return _churchLogoPlaceholder(church, fallbackColor, size);
+  }
+
+  Widget _churchLogoPlaceholder(TenantConfig church, Color color, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1),
+      ),
+      child: Center(
+        child: Text(
+          church.name.isNotEmpty ? church.name[0] : 'C',
+          style: GoogleFonts.poppins(
+              fontSize: size * 0.4,
+              fontWeight: FontWeight.bold,
+              color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  Widget _churchValueCard(IconData icon, String title, String desc, Color accentColor) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: accentColor, size: 22),
+          ),
+          const SizedBox(height: 14),
+          Text(title,
+              style: GoogleFonts.poppins(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF0B1D3A))),
+          const SizedBox(height: 6),
+          Text(desc,
+              style: GoogleFonts.poppins(
+                  fontSize: 12, color: Colors.grey[600], height: 1.5)),
+        ],
+      ),
+    );
+  }
+
+  Color _parseColor(String hex, Color fallback) {
+    final cleaned = hex.replaceAll('#', '');
+    if (cleaned.length != 6) return fallback;
+    return Color(int.parse('FF$cleaned', radix: 16));
   }
 
   // ── Navigation Bar ────────────────────────────────────────────────────────
@@ -850,10 +1464,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               isMobile
                   ? Column(
                       children: _churches
-                          .map((c) => Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: _ChurchCard(tenant: c, isMobile: true, onTap: _openPortal),
-                              ))
+                              .map((c) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: _ChurchCard(tenant: c, isMobile: true, onTap: () => _selectChurch(c)),
+                                  ))
                           .toList(),
                     )
                   : Wrap(
@@ -862,7 +1476,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       children: _churches
                           .map((c) => SizedBox(
                                 width: 340,
-                                child: _ChurchCard(tenant: c, isMobile: false, onTap: _openPortal),
+                                child: _ChurchCard(tenant: c, isMobile: false, onTap: () => _selectChurch(c)),
                               ))
                           .toList(),
                     ),
@@ -1253,9 +1867,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           const SizedBox(height: 16),
           Center(
             child: TextButton(
-              onPressed: _goHome,
+              onPressed: () {
+                if (_selectedChurch != null) {
+                  setState(() => _view = 'church_home');
+                } else {
+                  _goHome();
+                }
+              },
               child: Text(
-                '← Back to Home',
+                _selectedChurch != null ? '← Back to Church' : '← Back to Home',
                 style: GoogleFonts.poppins(
                     fontSize: 12,
                     color: AppColors.textSecondary.withValues(alpha: 0.7),
