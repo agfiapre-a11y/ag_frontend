@@ -274,14 +274,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         child: Row(
           children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppColors.secondary,
-                borderRadius: BorderRadius.circular(10),
+            Image.asset(
+              'assets/images/AG_logo.png',
+              width: 44,
+              height: 44,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.secondary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.church, color: Color(0xFF0B1D3A), size: 24),
               ),
-              child: const Icon(Icons.church, color: Color(0xFF0B1D3A), size: 24),
             ),
             const SizedBox(width: 12),
             Column(
@@ -1089,14 +1095,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           children: [
             Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.secondary,
-                    borderRadius: BorderRadius.circular(8),
+                Image.asset(
+                  'assets/images/AG_logo.png',
+                  width: 38,
+                  height: 38,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.church, color: Color(0xFF0B1D3A), size: 20),
                   ),
-                  child: const Icon(Icons.church, color: Color(0xFF0B1D3A), size: 20),
                 ),
                 const SizedBox(width: 10),
                 Text('Assemblies of God, Ghana',
