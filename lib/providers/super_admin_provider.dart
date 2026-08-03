@@ -105,9 +105,37 @@ class SuperAdminNotifier extends StateNotifier<SuperAdminState> {
     }
   }
 
-  Future<String?> updateTenant(String id, Map<String, dynamic> data) async {
+  Future<String?> updateTenant(
+    String id,
+    Map<String, dynamic> data, {
+    String? adminUserId,
+    String? adminName,
+    String? adminEmail,
+    String? adminPassword,
+  }) async {
     try {
       await ApiClient().patch('/tenants/$id', data);
+
+      // Update admin user if details provided and admin exists
+      if (adminUserId != null &&
+          (adminName != null ||
+              adminEmail != null ||
+              adminPassword != null)) {
+        final updateData = <String, dynamic>{};
+        if (adminName != null && adminName.isNotEmpty) {
+          updateData['name'] = adminName;
+        }
+        if (adminEmail != null && adminEmail.isNotEmpty) {
+          updateData['email'] = adminEmail;
+        }
+        if (adminPassword != null && adminPassword.isNotEmpty) {
+          updateData['password'] = adminPassword;
+        }
+        if (updateData.isNotEmpty) {
+          await ApiClient().patch('/auth/users/$adminUserId', updateData);
+        }
+      }
+
       await loadTenants();
       return null;
     } catch (e) {

@@ -7,6 +7,7 @@ import '../../models/tenant_config.dart';
 import '../../providers/super_admin_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_config.dart';
+import '../../services/api_client.dart';
 import '../../widgets/responsive_scaffold.dart';
 
 class SuperAdminDashboard extends ConsumerStatefulWidget {
@@ -620,6 +621,7 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
   final _adminNameCtrl = TextEditingController();
   final _adminEmailCtrl = TextEditingController();
   final _adminPasswordCtrl = TextEditingController();
+  String? _adminUserId;
 
   String _subscriptionTier = 'basic';
   String _primaryColor = '#2E7D32';
@@ -650,6 +652,26 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
       _primaryColor = t.primaryColor;
       _secondaryColor = t.secondaryColor;
       _enabledModules = t.enabledModules.toSet();
+      _loadAdminUser(t.id);
+    }
+  }
+
+  Future<void> _loadAdminUser(String tenantId) async {
+    try {
+      final users = await ApiClient().getList('/auth/users/$tenantId');
+      final admin = users.firstWhere(
+        (u) => u['role'] == 'church_admin',
+        orElse: () => null,
+      );
+      if (admin != null) {
+        setState(() {
+          _adminUserId = admin['id'] as String?;
+          _adminNameCtrl.text = admin['name'] as String? ?? '';
+          _adminEmailCtrl.text = admin['email'] as String? ?? '';
+        });
+      }
+    } catch (e) {
+      // Admin user may not exist yet, that's okay
     }
   }
 
@@ -686,20 +708,27 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
     String? error;
 
     if (widget.tenant != null) {
-      error = await notifier.updateTenant(widget.tenant!.id, {
-        'name': _nameCtrl.text.trim(),
-        'slug': _slugCtrl.text.trim(),
-        'address': _addressCtrl.text.trim(),
-        'phone': _phoneCtrl.text.trim(),
-        'email': _emailCtrl.text.trim(),
-        'maxMembers': int.tryParse(_maxMembersCtrl.text) ?? 500,
-        'maxBranches': int.tryParse(_maxBranchesCtrl.text) ?? 5,
-        'subscriptionTier': _subscriptionTier,
-        'subscriptionExpiry': _subscriptionExpiryCtrl.text.trim(),
-        'primaryColor': _primaryColor,
-        'secondaryColor': _secondaryColor,
-        'enabledModules': _enabledModules.toList(),
-      });
+      error = await notifier.updateTenant(
+        widget.tenant!.id,
+        {
+          'name': _nameCtrl.text.trim(),
+          'slug': _slugCtrl.text.trim(),
+          'address': _addressCtrl.text.trim(),
+          'phone': _phoneCtrl.text.trim(),
+          'email': _emailCtrl.text.trim(),
+          'maxMembers': int.tryParse(_maxMembersCtrl.text) ?? 500,
+          'maxBranches': int.tryParse(_maxBranchesCtrl.text) ?? 5,
+          'subscriptionTier': _subscriptionTier,
+          'subscriptionExpiry': _subscriptionExpiryCtrl.text.trim(),
+          'primaryColor': _primaryColor,
+          'secondaryColor': _secondaryColor,
+          'enabledModules': _enabledModules.toList(),
+        },
+        adminUserId: _adminUserId,
+        adminName: _adminNameCtrl.text.trim().isNotEmpty ? _adminNameCtrl.text.trim() : null,
+        adminEmail: _adminEmailCtrl.text.trim().isNotEmpty ? _adminEmailCtrl.text.trim() : null,
+        adminPassword: _adminPasswordCtrl.text.isNotEmpty ? _adminPasswordCtrl.text : null,
+      );
     } else {
       error = await notifier.createTenant(
         name: _nameCtrl.text.trim(),
@@ -913,43 +942,41 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
                     );
                   }).toList(),
                 ),
-                if (!isEdit) ...[
-                  const SizedBox(height: 20),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('Church Admin Account',
-                        style: GoogleFonts.poppins(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 20),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Church Admin Account',
+                      style: GoogleFonts.poppins(
+                          fontSize: 14, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _adminNameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Admin Name',
+                    prefixIcon: Icon(Icons.person),
                   ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _adminNameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Admin Name',
-                      prefixIcon: Icon(Icons.person),
-                    ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _adminEmailCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Admin Email',
+                    prefixIcon: Icon(Icons.email),
+                    helperText: 'This will be the login email',
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _adminEmailCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Admin Email',
-                      prefixIcon: Icon(Icons.email),
-                      helperText: 'This will be the login email',
-                    ),
-                    keyboardType: TextInputType.emailAddress,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _adminPasswordCtrl,
+                  decoration: InputDecoration(
+                    labelText: isEdit ? 'Admin Password (leave blank to keep current)' : 'Admin Password',
+                    prefixIcon: const Icon(Icons.lock),
+                    helperText: isEdit ? 'Only fill to change password' : 'Min 8 characters',
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _adminPasswordCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Admin Password',
-                      prefixIcon: Icon(Icons.lock),
-                      helperText: 'Min 8 characters',
-                    ),
-                    obscureText: true,
-                  ),
-                ],
+                  obscureText: true,
+                ),
               ],
             ),
           ),
