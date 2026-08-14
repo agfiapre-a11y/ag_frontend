@@ -155,7 +155,7 @@ class RemoteAuthService {
     return mapping[flutterRole] ?? flutterRole;
   }
 
-  /// Register a new user on the backend.
+  /// Register a new user on the backend (authenticated onboarding).
   static Future<void> registerUser({
     required String name,
     required String email,
@@ -163,7 +163,7 @@ class RemoteAuthService {
     required String role,
     required String tenantId,
   }) async {
-    await _api.post('/auth/register', {
+    await _api.post('/auth/onboard-user', {
       'name': name,
       'email': email,
       'password': password,
