@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Login rate limiter — tracks failed attempts and enforces lockout.
-/// NCSC-compliant: 5 failed attempts → 15-minute lockout.
+/// 5 failed attempts → 5-minute lockout.
 class RateLimiter {
   static const _key = 'login_attempts';
   static const int _maxAttempts = 5;
-  static const Duration _lockoutDuration = Duration(minutes: 15);
+  static const Duration _lockoutDuration = Duration(minutes: 5);
 
   static Future<bool> isLocked(String email) async {
     final attempts = await _getAttempts(email);

@@ -98,7 +98,7 @@ class AppStateNotifier extends StateNotifier<AppState> {
   // Returns error message or null on success
   Future<String?> login(String email, String password) async {
     if (await RateLimiter.isLocked(email)) {
-      return 'Too many failed attempts. Account locked for 15 minutes.';
+      return 'Too many failed attempts. Account locked for 5 minutes.';
     }
     try {
       final result = await AuthService.login(email, password);
