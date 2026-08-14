@@ -95,7 +95,7 @@ class AuthService {
       name: adminName,
       email: adminEmail.toLowerCase().trim(),
       passwordHash: hashPassword(adminPassword),
-      role: AppRoles.superAdmin,
+      role: AppRoles.localChurchAdmin,
       churchId: churchId,
       branchId: '',
       phone: adminPhone,

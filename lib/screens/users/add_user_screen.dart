@@ -275,17 +275,6 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
                       value: AppRoles.member, child: Text('Member')),
                   DropdownMenuItem(
                       value: AppRoles.guest, child: Text('Guest')),
-                  // Legacy roles for backward compatibility
-                  DropdownMenuItem(
-                      value: AppRoles.superAdmin, child: Text('Super Admin (Legacy)')),
-                  DropdownMenuItem(
-                      value: AppRoles.branchAdmin, child: Text('Branch Admin (Legacy)')),
-                  DropdownMenuItem(
-                      value: AppRoles.pastor, child: Text('Pastor (Legacy)')),
-                  DropdownMenuItem(
-                      value: AppRoles.accountant, child: Text('Accountant (Legacy)')),
-                  DropdownMenuItem(
-                      value: AppRoles.deptLeader, child: Text('Dept. Leader (Legacy)')),
                 ],
                 onChanged: (v) => setState(() {
                   _role = v!;

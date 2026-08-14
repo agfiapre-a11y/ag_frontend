@@ -131,13 +131,6 @@ class AppRoles {
   static const member = 'member';
   static const guest = 'guest';
 
-  // Legacy roles for backward compatibility
-  static const superAdmin = 'superAdmin';
-  static const branchAdmin = 'branchAdmin';
-  static const pastor = 'pastor';
-  static const accountant = 'accountant';
-  static const deptLeader = 'deptLeader';
-
   /// Roles that oversee multiple churches and are NOT tied to a single church.
   /// These roles have cross-church data access based on their hierarchy level.
   /// superSystemAdmin → all churches
@@ -173,11 +166,6 @@ class AppRoles {
     volunteer,
     member,
     guest,
-    superAdmin,
-    branchAdmin,
-    pastor,
-    accountant,
-    deptLeader,
   };
 
   /// Returns true if the role is above church level (cross-church access).
@@ -197,7 +185,6 @@ class AppRoles {
     regionalAdmin,
     districtAdmin,
     areaAdmin,
-    superAdmin,
   };
 
   /// Roles that can manage welfare cases (create, edit, delete, update status).
@@ -210,8 +197,6 @@ class AppRoles {
     localChurchAdmin,
     welfareHead,
     churchSecretary,
-    superAdmin,
-    branchAdmin,
   };
 
   /// Roles that can delete welfare cases (narrower than who can create).
@@ -222,8 +207,6 @@ class AppRoles {
     districtAdmin,
     areaAdmin,
     localChurchAdmin,
-    superAdmin,
-    branchAdmin,
   };
 
   /// Roles that can add, edit, and delete finance transactions. Pastoral
@@ -237,9 +220,6 @@ class AppRoles {
     areaAdmin,
     localChurchAdmin,
     financeOfficer,
-    superAdmin,
-    branchAdmin,
-    accountant,
   };
 
   /// Roles that can review and approve/reject finance approval requests
@@ -253,9 +233,6 @@ class AppRoles {
     localChurchAdmin,
     seniorPastor,
     associatePastor,
-    superAdmin,
-    branchAdmin,
-    pastor,
   };
 
   /// Roles that can create/edit/delete branches and departments.
@@ -266,8 +243,6 @@ class AppRoles {
     districtAdmin,
     areaAdmin,
     localChurchAdmin,
-    superAdmin,
-    branchAdmin,
   };
 
   /// Roles that can record and edit attendance.
@@ -283,10 +258,6 @@ class AppRoles {
     churchSecretary,
     ministryHead,
     cellLeader,
-    superAdmin,
-    branchAdmin,
-    pastor,
-    deptLeader,
   };
 
   /// Roles that can delete attendance records (narrower than who can record).
@@ -298,8 +269,6 @@ class AppRoles {
     areaAdmin,
     localChurchAdmin,
     churchSecretary,
-    superAdmin,
-    branchAdmin,
   };
 
   /// Roles that can add/edit/delete sermons.
@@ -315,8 +284,6 @@ class AppRoles {
     districtPastor,
     regionalBishop,
     ministryHead,
-    superAdmin,
-    pastor,
   };
 
   /// Roles that can add/edit/delete events.
@@ -334,16 +301,11 @@ class AppRoles {
     churchSecretary,
     ministryHead,
     cellLeader,
-    superAdmin,
-    pastor,
-    branchAdmin,
-    deptLeader,
   };
 
   /// Roles that can edit organization/church settings.
   static const churchSettingsManagerRoles = {
     superSystemAdmin,
-    superAdmin,
   };
 
   /// Roles eligible to be assigned as a branch's lead pastor/administrator.
@@ -351,7 +313,6 @@ class AppRoles {
     localChurchAdmin,
     seniorPastor,
     associatePastor,
-    pastor,
   };
 
   /// Roles scoped to a single local church/branch, requiring a branch
@@ -372,10 +333,6 @@ class AppRoles {
     volunteer,
     member,
     guest,
-    branchAdmin,
-    pastor,
-    accountant,
-    deptLeader,
   };
 
   /// Roles scoped to a specific department, requiring a department
@@ -386,7 +343,6 @@ class AppRoles {
     menFellowshipHead,
     womenFellowshipHead,
     childrenMinistryHead,
-    deptLeader,
   };
 
   static String label(String role) {
@@ -437,17 +393,6 @@ class AppRoles {
         return 'Member';
       case guest:
         return 'Guest';
-      // Legacy roles
-      case superAdmin:
-        return 'Super Admin';
-      case branchAdmin:
-        return 'Branch Admin';
-      case pastor:
-        return 'Pastor';
-      case accountant:
-        return 'Accountant';
-      case deptLeader:
-        return 'Department Leader';
       default:
         return role;
     }

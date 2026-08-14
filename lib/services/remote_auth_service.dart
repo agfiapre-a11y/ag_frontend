@@ -54,7 +54,7 @@ class RemoteAuthService {
       'name': adminName,
       'email': adminEmail,
       'password': adminPassword,
-      'role': 'church_admin',
+      'role': 'local_church_admin',
       'tenantId': tenant.id,
     });
 
@@ -121,15 +121,6 @@ class RemoteAuthService {
       'volunteer': AppRoles.volunteer,
       'member': AppRoles.member,
       'guest': AppRoles.guest,
-      'super_admin': AppRoles.superAdmin,
-      'branch_admin': AppRoles.branchAdmin,
-      'pastor': AppRoles.pastor,
-      'accountant': AppRoles.accountant,
-      'dept_leader': AppRoles.deptLeader,
-      'church_admin': AppRoles.localChurchAdmin,
-      'secretary': AppRoles.churchSecretary,
-      'treasurer': AppRoles.financeOfficer,
-      'observer': AppRoles.guest,
     };
     return mapping[backendRole] ?? backendRole;
   }
@@ -160,11 +151,6 @@ class RemoteAuthService {
       AppRoles.volunteer: 'volunteer',
       AppRoles.member: 'member',
       AppRoles.guest: 'guest',
-      AppRoles.superAdmin: 'super_admin',
-      AppRoles.branchAdmin: 'branch_admin',
-      AppRoles.pastor: 'pastor',
-      AppRoles.accountant: 'accountant',
-      AppRoles.deptLeader: 'dept_leader',
     };
     return mapping[flutterRole] ?? flutterRole;
   }
