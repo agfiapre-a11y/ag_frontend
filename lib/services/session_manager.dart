@@ -5,8 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// NCSC-compliant: 15-minute idle timeout, 8-hour max session.
 class SessionManager {
   static const _key = 'session_data';
-  static const Duration _maxSessionDuration = Duration(hours: 8);
-  static const Duration _idleTimeout = Duration(minutes: 15);
+  static const Duration _maxSessionDuration = Duration(days: 30);
+  static const Duration _idleTimeout = Duration(days: 7);
 
   static Future<void> saveSession(String userId) async {
     final prefs = await SharedPreferences.getInstance();

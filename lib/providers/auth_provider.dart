@@ -8,6 +8,8 @@ import '../services/tenant_context.dart';
 import '../services/rate_limiter.dart';
 import '../services/api_config.dart';
 import '../services/auth_token_manager.dart';
+import '../services/session_manager.dart';
+import '../services/api_client.dart';
 
 enum AppInitState { loading, needsSetup, unauthenticated, authenticated }
 
@@ -54,6 +56,37 @@ class AppStateNotifier extends StateNotifier<AppState> {
         state = const AppState(initState: AppInitState.needsSetup);
         return;
       }
+
+      // Check for a valid stored session — auto-login returning users
+      final sessionUserId = await SessionManager.getValidSessionUserId();
+      if (sessionUserId != null) {
+        final user = LocalDb.getUserById(sessionUserId);
+        final activeChurch = LocalDb.getChurch();
+        if (user != null && activeChurch != null) {
+          // Update last activity timestamp to extend the session
+          await SessionManager.updateLastActivity();
+
+          // Fetch tenant config if API is configured and user has a tenant
+          TenantConfig? tenantConfig;
+          if (ApiConfig.isConfigured && user.churchId.isNotEmpty) {
+            try {
+              final resp = await ApiClient().get('/tenants/by-id/${user.churchId}');
+              tenantConfig = TenantConfig.fromJson(resp);
+            } catch (_) {
+              // If tenant fetch fails, still proceed with local data
+            }
+          }
+
+          state = AppState(
+            initState: AppInitState.authenticated,
+            user: user,
+            church: activeChurch,
+            tenantConfig: tenantConfig,
+          );
+          return;
+        }
+      }
+
       final activeChurch = LocalDb.getChurch();
       state = AppState(initState: AppInitState.unauthenticated, church: activeChurch);
     } catch (e) {

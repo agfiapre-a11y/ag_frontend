@@ -83,7 +83,7 @@ Future<void> main() async {
       }
     }
 
-    await LocalDb.clearSession();
+    // Do NOT clear session on startup — we want auto-login for returning users
   } catch (e, st) {
     debugPrint('INIT ERROR: $e\n$st');
   }

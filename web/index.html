@@ -23,6 +23,7 @@
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Paradise AG">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
@@ -39,6 +40,22 @@
     <p style="color:#D4AF37;margin-top:20px;font-family:sans-serif;font-size:16px;">Loading Paradise AG...</p>
   </div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+  <!-- PWA Install Banner -->
+  <div id="pwa-install-banner" style="display:none;position:fixed;bottom:0;left:0;width:100%;background:#0F2E27;color:#fff;padding:12px 16px;box-shadow:0 -2px 10px rgba(0,0,0,0.3);z-index:10000;font-family:sans-serif;align-items:center;justify-content:space-between;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+      <img src="icons/Icon-192.png" style="width:36px;height:36px;border-radius:8px;flex-shrink:0;" alt="App icon">
+      <div style="min-width:0;">
+        <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Install Paradise AG</div>
+        <div style="font-size:12px;color:#aaa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Add to home screen for quick access</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-shrink:0;">
+      <button id="pwa-dismiss" style="background:transparent;border:1px solid #555;color:#aaa;padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;">Later</button>
+      <button id="pwa-install-btn" style="background:#D4AF37;border:none;color:#0F2E27;padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">Install</button>
+    </div>
+  </div>
+
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
@@ -58,6 +75,106 @@
       var l = document.getElementById('loading');
       if (l) l.style.display = 'none';
     }, 30000);
+
+    // PWA Install Prompt Handling
+    var deferredPrompt = null;
+    var banner = document.getElementById('pwa-install-banner');
+    var installBtn = document.getElementById('pwa-install-btn');
+    var dismissBtn = document.getElementById('pwa-dismiss');
+    var dismissKey = 'pwa_install_dismissed_at';
+    var oneDayMs = 24 * 60 * 60 * 1000;
+
+    function shouldShowBanner() {
+      // Don't show if already installed (standalone mode)
+      if (window.matchMedia('(display-mode: standalone)').matches ||
+          window.navigator.standalone === true) {
+        return false;
+      }
+      // Check if user dismissed less than 1 day ago
+      try {
+        var dismissed = localStorage.getItem(dismissKey);
+        if (dismissed) {
+          var elapsed = Date.now() - parseInt(dismissed);
+          if (elapsed < oneDayMs) return false;
+        }
+      } catch(e) {}
+      return deferredPrompt !== null;
+    }
+
+    function showBannerIfReady() {
+      if (shouldShowBanner()) {
+        banner.style.display = 'flex';
+      }
+    }
+
+    window.addEventListener('beforeinstallprompt', function(e) {
+      // Prevent the default browser prompt
+      e.preventDefault();
+      // Stash the event so it can be triggered later
+      deferredPrompt = e;
+      // Show our custom banner after a short delay (let loading finish)
+      setTimeout(showBannerIfReady, 2000);
+    });
+
+    installBtn.addEventListener('click', function() {
+      if (!deferredPrompt) return;
+      // Show the install prompt
+      deferredPrompt.prompt();
+      // Wait for user response
+      deferredPrompt.userChoice.then(function(choiceResult) {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted PWA install');
+        } else {
+          console.log('User dismissed PWA install');
+        }
+        // Clear the deferred prompt (browser won't fire beforeinstallprompt again until next visit)
+        deferredPrompt = null;
+        banner.style.display = 'none';
+      });
+    });
+
+    dismissBtn.addEventListener('click', function() {
+      banner.style.display = 'none';
+      try {
+        localStorage.setItem(dismissKey, Date.now().toString());
+      } catch(e) {}
+    });
+
+    // If app is installed, hide banner permanently
+    window.addEventListener('appinstalled', function() {
+      banner.style.display = 'none';
+      deferredPrompt = null;
+    });
+
+    // iOS: No beforeinstallprompt event, but we can detect if NOT installed
+    // and show instructions for "Add to Home Screen"
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    var isStandalone = window.navigator.standalone === true;
+    if (isIOS && !isStandalone) {
+      // Show iOS install instructions after a delay
+      setTimeout(function() {
+        try {
+          var dismissed = localStorage.getItem(dismissKey);
+          if (dismissed) {
+            var elapsed = Date.now() - parseInt(dismissed);
+            if (elapsed < oneDayMs) return;
+          }
+        } catch(e) {}
+
+        // Replace banner content with iOS instructions
+        banner.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' +
+          '<img src="icons/Icon-192.png" style="width:36px;height:36px;border-radius:8px;flex-shrink:0;" alt="App icon">' +
+          '<div style="min-width:0;"><div style="font-size:14px;font-weight:600;">Install Paradise AG</div>' +
+          '<div style="font-size:12px;color:#aaa;">Tap the Share button, then "Add to Home Screen"</div></div></div>' +
+          '<button id="ios-dismiss" style="background:transparent;border:1px solid #555;color:#aaa;padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;flex-shrink:0;">Later</button>';
+        banner.style.display = 'flex';
+
+        document.getElementById('ios-dismiss').addEventListener('click', function() {
+          banner.style.display = 'none';
+          try { localStorage.setItem(dismissKey, Date.now().toString()); } catch(e) {}
+        });
+      }, 3000);
+    }
   </script>
 </body>
 </html>

@@ -1,12 +1,16 @@
 {
+    "id": "/",
     "name": "Paradise AG",
     "short_name": "Paradise AG",
     "start_url": ".",
+    "scope": "/",
     "display": "standalone",
+    "display_override": ["standalone", "fullscreen"],
     "background_color": "#F5F3E8",
     "theme_color": "#0F2E27",
     "description": "Paradise AG Church Management App.",
     "orientation": "portrait-primary",
+    "categories": ["productivity", "business", "lifestyle"],
     "prefer_related_applications": false,
     "icons": [
         {
