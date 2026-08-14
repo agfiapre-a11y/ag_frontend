@@ -69,31 +69,6 @@
   -->
   <script src="flutter_bootstrap.js" async></script>
   <script>
-    // Force service worker updates to activate immediately and reload
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('flutter_service_worker.js').then(function(reg) {
-          // Listen for a new service worker taking control
-          navigator.serviceWorker.addEventListener('controllerchange', function() {
-            // New service worker has activated — reload to get fresh content
-            window.location.reload();
-          });
-
-          // Check for updates every 60 seconds
-          setInterval(function() {
-            reg.update();
-          }, 60000);
-        });
-
-        // If a waiting service worker exists, force it to activate immediately
-        navigator.serviceWorker.ready.then(function(reg) {
-          if (reg.waiting) {
-            reg.waiting.postMessage('skipWaiting');
-          }
-        });
-      });
-    }
-
     window.addEventListener('flutter-first-frame', function() {
       var l = document.getElementById('loading');
       if (l) l.style.display = 'none';
