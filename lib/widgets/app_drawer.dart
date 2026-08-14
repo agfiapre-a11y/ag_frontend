@@ -872,6 +872,10 @@ class AppDrawer extends ConsumerWidget {
                 if (role == AppRoles.member) ...[
                   const SizedBox(height: 16),
                   _EmeraldNavItem(
+                      icon: Icons.how_to_reg,
+                      label: 'Self Check-In',
+                      route: '/attendance/self-checkin'),
+                  _EmeraldNavItem(
                       icon: Icons.account_balance_wallet_outlined,
                       label: 'My Finances',
                       route: '/my-finance'),

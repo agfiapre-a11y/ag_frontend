@@ -63,6 +63,8 @@ dependencies:
   # Cloud sync (Supabase offline-first)
   supabase_flutter: ^2.8.3
   connectivity_plus: ^6.1.3
+  # GPS location for attendance proximity
+  geolocator: ^13.0.1
 
   flutter_web_plugins:
     sdk: flutter

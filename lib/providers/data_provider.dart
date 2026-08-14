@@ -24,6 +24,8 @@ import '../models/app_notification.dart';
 import '../core/constants.dart';
 import '../services/local_db.dart';
 import '../services/movement_classifier.dart';
+import '../services/api_config.dart';
+import '../services/api_client.dart';
 import 'auth_provider.dart';
 
 const _uuid = Uuid();
@@ -414,13 +416,22 @@ class AttendanceNotifier extends StateNotifier<List<AttendanceRecord>> {
   final String? branchFilter;
   final bool crossChurch;
   final String? ministryTypeFilter;
+  final String? tenantId;
 
   AttendanceNotifier(this.churchId, this.branchFilter,
-      {this.crossChurch = false, this.ministryTypeFilter}) : super([]) {
+      {this.crossChurch = false, this.ministryTypeFilter, this.tenantId}) : super([]) {
     _load();
   }
 
   void _load() {
+    if (ApiConfig.isConfigured && tenantId != null && !crossChurch) {
+      _loadFromBackend();
+    } else {
+      _loadLocal();
+    }
+  }
+
+  void _loadLocal() {
     state = crossChurch
         ? LocalDb.getAllAttendanceAcrossChurches()
         : LocalDb.getAllAttendanceRecords(
@@ -430,19 +441,132 @@ class AttendanceNotifier extends StateNotifier<List<AttendanceRecord>> {
           );
   }
 
-  Future<void> save(AttendanceRecord record) async {
-    await LocalDb.saveAttendanceRecord(record);
-    _load();
+  Future<void> _loadFromBackend() async {
+    try {
+      final api = ApiClient();
+      final queryPath = branchFilter != null
+          ? '/tenants/$tenantId/attendance?branchId=$branchFilter'
+          : '/tenants/$tenantId/attendance';
+      final resp = await api.get(queryPath);
+      final list = resp as List;
+      state = list
+          .map((e) => AttendanceRecord.fromBackend(e as Map<dynamic, dynamic>))
+          .toList();
+      // Also cache locally for offline access
+      for (final record in state) {
+        await LocalDb.saveAttendanceRecord(record);
+      }
+    } catch (_) {
+      _loadLocal();
+    }
   }
 
-  Future<void> update(AttendanceRecord record) async {
+  Future<String?> save(AttendanceRecord record) async {
+    if (ApiConfig.isConfigured && tenantId != null && !crossChurch) {
+      return _saveToBackend(record);
+    }
     await LocalDb.saveAttendanceRecord(record);
-    _load();
+    _loadLocal();
+    return null;
   }
 
-  Future<void> delete(String id) async {
+  Future<String?> _saveToBackend(AttendanceRecord record) async {
+    try {
+      final api = ApiClient();
+      final resp = await api.post('/tenants/$tenantId/attendance', {
+        'branchId': record.branchId,
+        'serviceType': record.serviceType,
+        'date': record.date.toIso8601String(),
+        'recordedById': record.recordedById,
+        'ministryType': record.ministryType,
+        'latitude': record.latitude,
+        'longitude': record.longitude,
+        'proximityRadius': record.proximityRadius,
+      });
+      final saved = AttendanceRecord.fromBackend(resp);
+      await LocalDb.saveAttendanceRecord(saved);
+      _loadFromBackend();
+      return null;
+    } catch (e) {
+      // Fallback to local save
+      await LocalDb.saveAttendanceRecord(record);
+      _loadLocal();
+      return e.toString();
+    }
+  }
+
+  Future<String?> update(AttendanceRecord record) async {
+    if (ApiConfig.isConfigured && tenantId != null && !crossChurch) {
+      try {
+        final api = ApiClient();
+        await api.patch('/tenants/$tenantId/attendance/${record.id}', {
+          'serviceType': record.serviceType,
+          'date': record.date.toIso8601String(),
+          'ministryType': record.ministryType,
+          'latitude': record.latitude,
+          'longitude': record.longitude,
+          'proximityRadius': record.proximityRadius,
+          'isActive': record.isActive,
+        });
+        // Also update present members on backend
+        await api.post(
+          '/tenants/$tenantId/attendance/${record.id}/mark-present',
+          {'memberIds': record.presentMemberIds},
+        );
+        _loadFromBackend();
+        return null;
+      } catch (e) {
+        await LocalDb.saveAttendanceRecord(record);
+        _loadLocal();
+        return e.toString();
+      }
+    }
+    await LocalDb.saveAttendanceRecord(record);
+    _loadLocal();
+    return null;
+  }
+
+  Future<String?> delete(String id) async {
+    if (ApiConfig.isConfigured && tenantId != null && !crossChurch) {
+      try {
+        final api = ApiClient();
+        await api.delete('/tenants/$tenantId/attendance/$id');
+        _loadFromBackend();
+        return null;
+      } catch (e) {
+        await LocalDb.deleteAttendanceRecord(id);
+        _loadLocal();
+        return e.toString();
+      }
+    }
     await LocalDb.deleteAttendanceRecord(id);
-    _load();
+    _loadLocal();
+    return null;
+  }
+
+  // Member self-check-in with GPS proximity validation
+  Future<({bool success, String message, int distance})> selfCheckIn(
+    String attendanceId,
+    double latitude,
+    double longitude,
+  ) async {
+    if (ApiConfig.isConfigured && tenantId != null) {
+      try {
+        final api = ApiClient();
+        final resp = await api.post(
+          '/tenants/$tenantId/attendance/$attendanceId/self-checkin',
+          {'latitude': latitude, 'longitude': longitude},
+        );
+        final success = resp['success'] as bool;
+        final message = resp['message'] as String;
+        final distance = (resp['distance'] as num).toInt();
+        if (success) _loadFromBackend();
+        return (success: success, message: message, distance: distance);
+      } catch (e) {
+        return (success: false, message: e.toString(), distance: 0);
+      }
+    }
+    return (success: false, message: 'Backend not configured', distance: 0);
   }
 
   void refresh() => _load();
@@ -485,7 +609,8 @@ final attendanceProvider =
 
   return AttendanceNotifier(churchId, branchFilter,
       crossChurch: _isCrossChurchRole(user?.role),
-      ministryTypeFilter: ministryTypeFilter);
+      ministryTypeFilter: ministryTypeFilter,
+      tenantId: user?.churchId.isNotEmpty == true ? user!.churchId : null);
 });
 
 // ── Finance ───────────────────────────────────────────────────────────────────

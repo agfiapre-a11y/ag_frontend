@@ -22,6 +22,7 @@ import '../screens/attendance/attendance_screen.dart';
 import '../screens/attendance/take_attendance_screen.dart';
 import '../screens/attendance/attendance_detail_screen.dart';
 import '../screens/attendance/edit_attendance_screen.dart';
+import '../screens/attendance/self_check_in_screen.dart';
 import '../screens/finance/finance_screen.dart';
 import '../screens/finance/add_transaction_screen.dart';
 import '../screens/finance/edit_transaction_screen.dart';
@@ -259,6 +260,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'take',
             builder: (_, _) => const DashboardThemeWrapper(child: TakeAttendanceScreen()),
+          ),
+          GoRoute(
+            path: 'self-checkin',
+            builder: (_, _) => const DashboardThemeWrapper(child: SelfCheckInScreen()),
           ),
           GoRoute(
             path: 'edit/:id',

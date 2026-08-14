@@ -96,15 +96,28 @@ class _EditAttendanceScreenState
         presentMemberIds: _presentIds.toList(),
         recordedById: existingRecord.recordedById,
         createdAt: existingRecord.createdAt,
+        latitude: existingRecord.latitude,
+        longitude: existingRecord.longitude,
+        proximityRadius: existingRecord.proximityRadius,
+        isActive: existingRecord.isActive,
       );
-      await ref.read(attendanceProvider.notifier).update(updatedRecord);
+      final error = await ref.read(attendanceProvider.notifier).update(updatedRecord);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Attendance updated'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Updated locally: $error'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Attendance updated'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
         context.pop();
       }
     } catch (e) {
