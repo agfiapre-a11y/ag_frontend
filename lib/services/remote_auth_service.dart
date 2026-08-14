@@ -73,7 +73,12 @@ class RemoteAuthService {
         'email': email,
         'password': password,
       });
+      final accessToken = authResp['accessToken'] as String;
       final tenantId = authResp['user']['tenantId'] as String?;
+
+      // Set auth token BEFORE fetching tenant so the request is authenticated
+      _api.setAuth(token: accessToken, tenantId: tenantId);
+
       final tenant = await _fetchTenant(tenantId);
       return _mapAuthResponse(authResp, tenant);
     } on ApiException catch (e) {
