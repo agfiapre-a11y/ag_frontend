@@ -267,6 +267,17 @@ class AuthService {
     String? districtId,
     String? areaId,
   }) async {
+    // Register on backend when API is configured
+    if (ApiConfig.isConfigured && churchId.isNotEmpty) {
+      await RemoteAuthService.registerUser(
+        name: name,
+        email: email,
+        password: password,
+        role: role,
+        tenantId: churchId,
+      );
+    }
+
     final movement = MovementClassifier.classify(
       dateOfBirth: dateOfBirth,
       gender: gender,

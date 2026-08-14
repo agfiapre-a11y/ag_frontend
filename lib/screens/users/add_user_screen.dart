@@ -42,7 +42,8 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
     super.dispose();
   }
 
-  bool get _needsBranch => AppRoles.branchScopedRoles.contains(_role);
+  // Branch is always optional — local church admin (tenant manager)
+  // can onboard users without requiring a branch assignment.
 
   String get _computedMovement => MovementClassifier.classify(
         dateOfBirth: _dob,
@@ -53,13 +54,6 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-
-    if (_needsBranch && _branchId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please assign a branch')),
-      );
-      return;
-    }
 
     if (AppRoles.departmentScopedRoles.contains(_role) && _departmentId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,7 +108,7 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
     final allDepts = ref.watch(departmentProvider);
     final branchDepts = _branchId != null
         ? allDepts.where((d) => d.branchId == _branchId).toList()
-        : <Department>[];
+        : allDepts;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Add User')),
@@ -295,10 +289,6 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
                 ],
                 onChanged: (v) => setState(() {
                   _role = v!;
-                  if (!_needsBranch) {
-                    _branchId = null;
-                    _departmentId = null;
-                  }
                   if (!AppRoles.departmentScopedRoles.contains(_role)) {
                     _departmentId = null;
                   }
@@ -308,9 +298,9 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _branchId,
-                  decoration: InputDecoration(
-                    labelText: _needsBranch ? 'Branch *' : 'Branch (optional)',
-                    prefixIcon: const Icon(Icons.account_tree),
+                  decoration: const InputDecoration(
+                    labelText: 'Branch (optional)',
+                    prefixIcon: Icon(Icons.account_tree),
                   ),
                   hint: const Text('Select branch'),
                   items: [
@@ -325,7 +315,7 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
                 ),
               ],
               if (AppRoles.departmentScopedRoles.contains(_role) &&
-                  _branchId != null) ...[
+                  branchDepts.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 if (branchDepts.isEmpty)
                   Container(

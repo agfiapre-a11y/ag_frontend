@@ -99,14 +99,91 @@ class RemoteAuthService {
   static String _mapRole(String backendRole) {
     const mapping = {
       'super_system_admin': AppRoles.superSystemAdmin,
-      'church_admin': AppRoles.localChurchAdmin,
+      'national_admin': AppRoles.nationalAdmin,
+      'national_executive': AppRoles.nationalExecutive,
+      'regional_admin': AppRoles.regionalAdmin,
+      'regional_bishop': AppRoles.regionalBishop,
+      'district_admin': AppRoles.districtAdmin,
+      'district_pastor': AppRoles.districtPastor,
+      'area_admin': AppRoles.areaAdmin,
+      'local_church_admin': AppRoles.localChurchAdmin,
+      'senior_pastor': AppRoles.seniorPastor,
+      'associate_pastor': AppRoles.associatePastor,
+      'church_secretary': AppRoles.churchSecretary,
+      'finance_officer': AppRoles.financeOfficer,
+      'ministry_head': AppRoles.ministryHead,
+      'youth_ministry_head': AppRoles.youthMinistryHead,
+      'men_fellowship_head': AppRoles.menFellowshipHead,
+      'women_fellowship_head': AppRoles.womenFellowshipHead,
+      'children_ministry_head': AppRoles.childrenMinistryHead,
+      'welfare_head': AppRoles.welfareHead,
+      'cell_leader': AppRoles.cellLeader,
+      'volunteer': AppRoles.volunteer,
+      'member': AppRoles.member,
+      'guest': AppRoles.guest,
+      'super_admin': AppRoles.superAdmin,
       'branch_admin': AppRoles.branchAdmin,
+      'pastor': AppRoles.pastor,
+      'accountant': AppRoles.accountant,
+      'dept_leader': AppRoles.deptLeader,
+      'church_admin': AppRoles.localChurchAdmin,
       'secretary': AppRoles.churchSecretary,
       'treasurer': AppRoles.financeOfficer,
-      'member': AppRoles.member,
       'observer': AppRoles.guest,
     };
     return mapping[backendRole] ?? backendRole;
+  }
+
+  /// Maps Flutter camelCase roles to backend snake_case roles.
+  static String _mapRoleToBackend(String flutterRole) {
+    const mapping = {
+      AppRoles.superSystemAdmin: 'super_system_admin',
+      AppRoles.nationalAdmin: 'national_admin',
+      AppRoles.nationalExecutive: 'national_executive',
+      AppRoles.regionalAdmin: 'regional_admin',
+      AppRoles.regionalBishop: 'regional_bishop',
+      AppRoles.districtAdmin: 'district_admin',
+      AppRoles.districtPastor: 'district_pastor',
+      AppRoles.areaAdmin: 'area_admin',
+      AppRoles.localChurchAdmin: 'local_church_admin',
+      AppRoles.seniorPastor: 'senior_pastor',
+      AppRoles.associatePastor: 'associate_pastor',
+      AppRoles.churchSecretary: 'church_secretary',
+      AppRoles.financeOfficer: 'finance_officer',
+      AppRoles.ministryHead: 'ministry_head',
+      AppRoles.youthMinistryHead: 'youth_ministry_head',
+      AppRoles.menFellowshipHead: 'men_fellowship_head',
+      AppRoles.womenFellowshipHead: 'women_fellowship_head',
+      AppRoles.childrenMinistryHead: 'children_ministry_head',
+      AppRoles.welfareHead: 'welfare_head',
+      AppRoles.cellLeader: 'cell_leader',
+      AppRoles.volunteer: 'volunteer',
+      AppRoles.member: 'member',
+      AppRoles.guest: 'guest',
+      AppRoles.superAdmin: 'super_admin',
+      AppRoles.branchAdmin: 'branch_admin',
+      AppRoles.pastor: 'pastor',
+      AppRoles.accountant: 'accountant',
+      AppRoles.deptLeader: 'dept_leader',
+    };
+    return mapping[flutterRole] ?? flutterRole;
+  }
+
+  /// Register a new user on the backend.
+  static Future<void> registerUser({
+    required String name,
+    required String email,
+    required String password,
+    required String role,
+    required String tenantId,
+  }) async {
+    await _api.post('/auth/register', {
+      'name': name,
+      'email': email,
+      'password': password,
+      'role': _mapRoleToBackend(role),
+      'tenantId': tenantId,
+    });
   }
 
   static RemoteAuthResult _mapAuthResponse(
