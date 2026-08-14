@@ -484,6 +484,16 @@ class AttendanceNotifier extends StateNotifier<List<AttendanceRecord>> {
         'proximityRadius': record.proximityRadius,
       });
       final saved = AttendanceRecord.fromBackend(resp);
+
+      // Sync manually-marked present members to backend
+      if (record.presentMemberIds.isNotEmpty) {
+        await api.post(
+          '/tenants/$tenantId/attendance/${saved.id}/mark-present',
+          {'memberIds': record.presentMemberIds},
+        );
+        saved.copyWith(presentMemberIds: record.presentMemberIds);
+      }
+
       await LocalDb.saveAttendanceRecord(saved);
       _loadFromBackend();
       return null;
