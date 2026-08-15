@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants.dart';
+import '../../models/tenant_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/data_provider.dart';
+import '../../providers/super_admin_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/movement_classifier.dart';
 
@@ -30,6 +32,12 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
   DateTime? _dob;
   String _maritalStatus = 'single';
   bool _isEmployed = false;
+  TenantConfig? _selectedTenant;
+
+  bool get _isSuperAdmin {
+    final user = ref.read(appStateProvider).user;
+    return user?.role == AppRoles.superSystemAdmin;
+  }
 
   @override
   void dispose() {
@@ -63,13 +71,23 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
     setState(() => _loading = true);
     try {
       final appState = ref.read(appStateProvider);
+      final churchId = _isSuperAdmin
+          ? (_selectedTenant?.id ?? '')
+          : (appState.church?.id ?? '');
+      if (_isSuperAdmin && churchId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a church/tenant')),
+        );
+        setState(() => _loading = false);
+        return;
+      }
       await AuthService.registerUser(
         name: _nameCtrl.text.trim(),
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
         phone: _phoneCtrl.text.trim(),
         role: _role,
-        churchId: appState.church?.id ?? "",
+        churchId: churchId,
         branchId: '',
         departmentId: _departmentId ?? '',
         dateOfBirth: _dob,
@@ -104,6 +122,11 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
   Widget build(BuildContext context) {
     final allDepts = ref.watch(departmentProvider);
     final availableDepts = allDepts.toList();
+    final superAdminState = ref.watch(superAdminProvider);
+
+    if (_isSuperAdmin && superAdminState.tenants.isEmpty && !superAdminState.isLoading) {
+      ref.read(superAdminProvider.notifier).loadTenants();
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Add User')),
@@ -114,6 +137,32 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_isSuperAdmin) ...[
+                _sectionLabel('Church / Tenant'),
+                const SizedBox(height: 12),
+                if (superAdminState.isLoading)
+                  const Center(child: CircularProgressIndicator())
+                else if (superAdminState.tenants.isEmpty)
+                  Text('No tenants found. Create a tenant first.',
+                      style: GoogleFonts.poppins(color: AppColors.textSecondary))
+                else
+                  DropdownButtonFormField<TenantConfig>(
+                    value: _selectedTenant,
+                    decoration: const InputDecoration(
+                      labelText: 'Assign to Church *',
+                      prefixIcon: Icon(Icons.church),
+                    ),
+                    items: superAdminState.tenants
+                        .map((t) => DropdownMenuItem(
+                              value: t,
+                              child: Text(t.name),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedTenant = v),
+                    validator: (v) => v == null ? 'Please select a church' : null,
+                  ),
+                const SizedBox(height: 20),
+              ],
               _sectionLabel('Personal Information'),
               const SizedBox(height: 12),
               _field(_nameCtrl, 'Full Name', Icons.person, required: true),

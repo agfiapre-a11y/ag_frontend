@@ -89,11 +89,11 @@ class SuperAdminNotifier extends StateNotifier<SuperAdminState> {
           adminEmail.isNotEmpty &&
           adminPassword != null &&
           adminPassword.isNotEmpty) {
-        await ApiClient().post('/auth/register', {
+        await ApiClient().post('/auth/onboard-user', {
           'name': adminName,
           'email': adminEmail,
           'password': adminPassword,
-          'role': 'church_admin',
+          'role': 'local_church_admin',
           'tenantId': tenant.id,
         });
       }
