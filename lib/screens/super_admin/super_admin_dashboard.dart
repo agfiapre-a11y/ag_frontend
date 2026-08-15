@@ -660,7 +660,7 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
     try {
       final users = await ApiClient().getList('/auth/users/$tenantId');
       final admin = users.firstWhere(
-        (u) => u['role'] == 'church_admin',
+        (u) => u['role'] == 'local_church_admin' || u['role'] == 'church_admin',
         orElse: () => null,
       );
       if (admin != null) {
