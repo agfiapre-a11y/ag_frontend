@@ -1,7 +1,7 @@
 [build]
   command = """
-    git clone https://github.com/flutter/flutter.git /opt/flutter --branch stable --depth 1 && \
-    export PATH="/opt/flutter/bin:$PATH" && \
+    git clone https://github.com/flutter/flutter.git /tmp/flutter --branch stable --depth 1 && \
+    export PATH="/tmp/flutter/bin:$PATH" && \
     flutter precache --web && \
     flutter pub get && \
     flutter build web --release \
