@@ -1,0 +1,17 @@
+[build]
+  command = """
+    flutter build web --release \
+      --dart-define=API_BASE_URL=$API_BASE_URL \
+      --dart-define=SUPABASE_URL=$SUPABASE_URL \
+      --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+  """
+  publish = "build/web"
+
+[build.environment]
+  FlutterVersion = "stable"
+
+# SPA fallback so client-side routes work
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
