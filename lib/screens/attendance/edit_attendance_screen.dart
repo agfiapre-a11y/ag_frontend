@@ -167,7 +167,6 @@ class _EditAttendanceScreenState
   @override
   Widget build(BuildContext context) {
     final allMembers = ref.watch(memberProvider);
-    final user = ref.watch(appStateProvider).user!;
 
     final branchMembers = _branchMembers(allMembers)
         .where((m) => m.isActive)

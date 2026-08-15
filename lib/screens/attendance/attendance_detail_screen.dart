@@ -23,18 +23,13 @@ class AttendanceDetailScreen extends ConsumerWidget {
     }
 
     final allMembers = ref.watch(memberProvider);
-    final branches = ref.watch(branchProvider);
-    final branchMembers =
-        allMembers.where((m) => m.branchId == record.branchId).toList()
+    final activeMembers =
+        allMembers.where((m) => m.isActive).toList()
           ..sort((a, b) => a.name.compareTo(b.name));
-    final branchName = branches
-        .where((b) => b.id == record.branchId)
-        .firstOrNull
-        ?.name;
     final recorder = LocalDb.getUserById(record.recordedById);
 
     final presentSet = record.presentMemberIds.toSet();
-    final totalCount = branchMembers.length;
+    final totalCount = activeMembers.length;
     final presentCount = record.presentCount;
     final absentCount = totalCount - presentCount;
     final pct = totalCount > 0 ? presentCount / totalCount : 0.0;
@@ -81,17 +76,6 @@ class AttendanceDetailScreen extends ConsumerWidget {
                         fontSize: 20,
                         fontWeight: FontWeight.bold),
                   ),
-                  if (branchName != null) ...[
-                    const SizedBox(height: 4),
-                    Row(children: [
-                      const Icon(Icons.account_tree,
-                          size: 13, color: Colors.white60),
-                      const SizedBox(width: 4),
-                      Text(branchName,
-                          style: GoogleFonts.poppins(
-                              color: Colors.white60, fontSize: 12)),
-                    ]),
-                  ],
                   const SizedBox(height: 16),
                   Row(children: [
                     _StatPill(
@@ -161,11 +145,11 @@ class AttendanceDetailScreen extends ConsumerWidget {
                   style: GoogleFonts.poppins(
                       fontSize: 15, fontWeight: FontWeight.w600)),
             ),
-            if (branchMembers.isEmpty)
+            if (activeMembers.isEmpty)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(32),
-                  child: Text('No members in this branch',
+                  child: Text('No active members',
                       style: GoogleFonts.poppins(
                           color: AppColors.textSecondary)),
                 ),
@@ -175,10 +159,10 @@ class AttendanceDetailScreen extends ConsumerWidget {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                itemCount: branchMembers.length,
+                itemCount: activeMembers.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 6),
                 itemBuilder: (_, i) {
-                  final member = branchMembers[i];
+                  final member = activeMembers[i];
                   final isPresent = presentSet.contains(member.id);
                   return Card(
                     child: ListTile(
