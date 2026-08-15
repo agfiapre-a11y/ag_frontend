@@ -22,7 +22,6 @@ class _AddEditDepartmentScreenState
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  String? _branchId;
   bool _saving = false;
   Department? _existing;
 
@@ -34,7 +33,6 @@ class _AddEditDepartmentScreenState
       if (_existing != null) {
         _nameCtrl.text = _existing!.name;
         _descCtrl.text = _existing!.description;
-        _branchId = _existing!.branchId;
       }
     }
   }
@@ -50,12 +48,6 @@ class _AddEditDepartmentScreenState
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_branchId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a branch')),
-      );
-      return;
-    }
 
     setState(() => _saving = true);
     try {
@@ -63,12 +55,12 @@ class _AddEditDepartmentScreenState
         final updated = _existing!.copyWith(
           name: _nameCtrl.text.trim(),
           description: _descCtrl.text.trim(),
-          branchId: _branchId,
+          branchId: '',
         );
         await ref.read(departmentProvider.notifier).update(updated);
       } else {
         await ref.read(departmentProvider.notifier).add(
-              branchId: _branchId!,
+              branchId: '',
               name: _nameCtrl.text.trim(),
               description: _descCtrl.text.trim(),
             );
@@ -87,8 +79,6 @@ class _AddEditDepartmentScreenState
 
   @override
   Widget build(BuildContext context) {
-    final branches = ref.watch(branchProvider);
-
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEdit ? 'Edit Department' : 'New Department'),
@@ -151,38 +141,6 @@ class _AddEditDepartmentScreenState
                 alignLabelWithHint: true,
               ),
             ),
-            const SizedBox(height: 24),
-            _label('Branch'),
-            const SizedBox(height: 12),
-            if (branches.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amber.shade200),
-                ),
-                child: Text(
-                  'No branches available. Create a branch first.',
-                  style: GoogleFonts.poppins(
-                      fontSize: 13, color: Colors.amber.shade800),
-                ),
-              )
-            else
-              DropdownButtonFormField<String>(
-                initialValue: _branchId,
-                decoration: const InputDecoration(
-                  labelText: 'Assign to Branch *',
-                  prefixIcon: Icon(Icons.account_tree_outlined),
-                ),
-                hint: const Text('Select branch'),
-                items: branches
-                    .map((b) =>
-                        DropdownMenuItem(value: b.id, child: Text(b.name)))
-                    .toList(),
-                onChanged: (v) => setState(() => _branchId = v),
-                validator: (v) => v == null ? 'Please select a branch' : null,
-              ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
               onPressed: _saving ? null : _save,

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants.dart';
 import '../../models/app_user.dart';
-import '../../models/department.dart';
 import '../../providers/data_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/local_db.dart';
@@ -24,7 +23,6 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
   final _phoneCtrl = TextEditingController();
   final _newPasswordCtrl = TextEditingController();
   String _role = AppRoles.member;
-  String? _branchId;
   String? _departmentId;
   bool _loading = false;
   bool _showPasswordField = false;
@@ -39,7 +37,6 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
       _nameCtrl.text = _user!.name;
       _phoneCtrl.text = _user!.phone;
       _role = _user!.role;
-      _branchId = _user!.branchId.isNotEmpty ? _user!.branchId : null;
       _departmentId =
           _user!.departmentId.isNotEmpty ? _user!.departmentId : null;
     }
@@ -52,8 +49,6 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
     _newPasswordCtrl.dispose();
     super.dispose();
   }
-
-  bool get _needsBranch => AppRoles.branchScopedRoles.contains(_role);
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -70,7 +65,7 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
         name: _nameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
         role: _role,
-        branchId: _branchId ?? '',
+        branchId: '',
         departmentId: AppRoles.departmentScopedRoles.contains(_role)
             ? (_departmentId ?? '')
             : '',
@@ -108,11 +103,8 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
       );
     }
 
-    final branches = ref.watch(branchProvider);
     final allDepts = ref.watch(departmentProvider);
-    final branchDepts = _branchId != null
-        ? allDepts.where((d) => d.branchId == _branchId).toList()
-        : <Department>[];
+    final availableDepts = allDepts.toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Edit User')),
@@ -220,40 +212,14 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
                 ],
                 onChanged: (v) => setState(() {
                   _role = v!;
-                  if (!_needsBranch) {
-                    _branchId = null;
-                    _departmentId = null;
-                  }
                   if (!AppRoles.departmentScopedRoles.contains(_role)) {
                     _departmentId = null;
                   }
                 }),
               ),
-              if (branches.isNotEmpty) ...[
+              if (AppRoles.departmentScopedRoles.contains(_role)) ...[
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _branchId,
-                  decoration: InputDecoration(
-                    labelText:
-                        _needsBranch ? 'Branch *' : 'Branch (optional)',
-                    prefixIcon: const Icon(Icons.account_tree),
-                  ),
-                  hint: const Text('Select branch'),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('None')),
-                    ...branches.map((b) =>
-                        DropdownMenuItem(value: b.id, child: Text(b.name))),
-                  ],
-                  onChanged: (v) => setState(() {
-                    _branchId = v;
-                    _departmentId = null;
-                  }),
-                ),
-              ],
-              if (AppRoles.departmentScopedRoles.contains(_role) &&
-                  _branchId != null) ...[
-                const SizedBox(height: 12),
-                if (branchDepts.isEmpty)
+                if (availableDepts.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -262,7 +228,7 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
                       border: Border.all(color: Colors.amber.shade200),
                     ),
                     child: Text(
-                      'No departments in this branch.',
+                      'No departments available. Create a department first.',
                       style: GoogleFonts.poppins(
                           fontSize: 12, color: Colors.amber.shade800),
                     ),
@@ -275,7 +241,7 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
                       prefixIcon: Icon(Icons.groups_2_outlined),
                     ),
                     hint: const Text('Select department'),
-                    items: branchDepts
+                    items: availableDepts
                         .map((d) => DropdownMenuItem(
                             value: d.id, child: Text(d.name)))
                         .toList(),

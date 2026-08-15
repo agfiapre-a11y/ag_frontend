@@ -11,9 +11,6 @@ import '../screens/super_admin/super_admin_dashboard.dart';
 import '../screens/members/members_screen.dart';
 import '../screens/members/add_member_screen.dart';
 import '../screens/members/edit_member_screen.dart';
-import '../screens/branches/branches_screen.dart';
-import '../screens/branches/add_branch_screen.dart';
-import '../screens/branches/edit_branch_screen.dart';
 import '../screens/users/users_screen.dart';
 import '../screens/users/add_user_screen.dart';
 import '../screens/users/edit_user_screen.dart';
@@ -293,21 +290,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'edit/:id',
             builder: (_, state) =>
                 DashboardThemeWrapper(child: EditUserScreen(userId: state.pathParameters['id']!)),
-          ),
-        ],
-      ),
-      GoRoute(
-        path: '/branches',
-        builder: (_, _) => const DashboardThemeWrapper(child: BranchesScreen()),
-        routes: [
-          GoRoute(
-            path: 'add',
-            builder: (_, _) => const DashboardThemeWrapper(child: AddBranchScreen()),
-          ),
-          GoRoute(
-            path: 'edit/:id',
-            builder: (_, state) =>
-                DashboardThemeWrapper(child: EditBranchScreen(branchId: state.pathParameters['id']!)),
           ),
         ],
       ),

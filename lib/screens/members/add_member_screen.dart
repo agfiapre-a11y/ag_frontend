@@ -4,8 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants.dart';
-import '../../models/department.dart';
-import '../../providers/auth_provider.dart';
+import '../../models/member.dart';
 import '../../providers/data_provider.dart';
 import '../../services/movement_classifier.dart';
 
@@ -26,7 +25,6 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
   DateTime? _dob;
   String _maritalStatus = 'single';
   bool _isEmployed = false;
-  String? _selectedBranchId;
   String? _selectedDeptId;
   bool _loading = false;
 
@@ -49,22 +47,10 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final appState = ref.read(appStateProvider);
-    final user = appState.user!;
-    final isSuperAdmin = AppRoles.crossBranchRoles.contains(user.role);
-    final branchId = isSuperAdmin ? (_selectedBranchId ?? '') : user.branchId;
-
-    if (branchId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a branch')),
-      );
-      return;
-    }
-
     setState(() => _loading = true);
     try {
       await ref.read(memberProvider.notifier).add(
-            branchId: branchId,
+            branchId: '',
             name: _nameCtrl.text.trim(),
             email: _emailCtrl.text.trim(),
             phone: _phoneCtrl.text.trim(),
@@ -99,18 +85,8 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final appState = ref.watch(appStateProvider);
-    final user = appState.user!;
-    final branches = ref.watch(branchProvider);
     final allDepts = ref.watch(departmentProvider);
-    final isSuperAdmin = AppRoles.crossBranchRoles.contains(user.role);
-    final effectiveBranchId = isSuperAdmin ? _selectedBranchId : user.branchId;
-    final branchDepts =
-        (effectiveBranchId != null && effectiveBranchId.isNotEmpty)
-            ? allDepts
-                .where((d) => d.branchId == effectiveBranchId)
-                .toList()
-            : <Department>[];
+    final availableDepts = allDepts.toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Add Member')),
@@ -221,35 +197,7 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
                   ]),
                 ),
               ],
-              if (isSuperAdmin && branches.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text('Branch Assignment',
-                    style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
-                        fontSize: 13)),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedBranchId,
-                  decoration: const InputDecoration(
-                    labelText: 'Select Branch',
-                    prefixIcon: Icon(Icons.account_tree),
-                  ),
-                  hint: const Text('Choose a branch'),
-                  items: branches
-                      .map((b) =>
-                          DropdownMenuItem(value: b.id, child: Text(b.name)))
-                      .toList(),
-                  onChanged: (v) => setState(() {
-                    _selectedBranchId = v;
-                    _selectedDeptId = null;
-                  }),
-                  validator: isSuperAdmin
-                      ? (v) => v == null ? 'Please select a branch' : null
-                      : null,
-                ),
-              ],
-              if (branchDepts.isNotEmpty) ...[
+              if (availableDepts.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _selectedDeptId,
@@ -260,7 +208,7 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
                   hint: const Text('No department'),
                   items: [
                     const DropdownMenuItem(value: null, child: Text('None')),
-                    ...branchDepts.map((d) =>
+                    ...availableDepts.map((d) =>
                         DropdownMenuItem(value: d.id, child: Text(d.name))),
                   ],
                   onChanged: (v) => setState(() => _selectedDeptId = v),

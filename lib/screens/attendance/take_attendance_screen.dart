@@ -24,7 +24,6 @@ class _TakeAttendanceScreenState
   final _uuid = const Uuid();
   String _serviceType = ServiceTypes.sundayService;
   DateTime _date = DateTime.now();
-  String? _branchId;
   final Set<String> _presentIds = {};
   bool _loading = false;
   String _search = '';
@@ -39,17 +38,10 @@ class _TakeAttendanceScreenState
   @override
   void initState() {
     super.initState();
-    final appState = ref.read(appStateProvider);
-    final user = appState.user!;
-    if (!AppRoles.crossBranchRoles.contains(user.role) &&
-        user.branchId.isNotEmpty) {
-      _branchId = user.branchId;
-    }
   }
 
   List<Member> _branchMembers(List<Member> all) {
-    if (_branchId == null || _branchId!.isEmpty) return all;
-    return all.where((m) => m.branchId == _branchId).toList();
+    return all;
   }
 
   List<Member> _filtered(List<Member> members) {
@@ -106,13 +98,6 @@ class _TakeAttendanceScreenState
     final appState = ref.read(appStateProvider);
     final user = appState.user!;
 
-    if (_branchId == null || _branchId!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a branch')),
-      );
-      return;
-    }
-
     if (_enableGps && (_latitude == null || _longitude == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please capture GPS location first')),
@@ -125,7 +110,7 @@ class _TakeAttendanceScreenState
       final record = AttendanceRecord(
         id: _uuid.v4(),
         churchId: appState.church?.id ?? "",
-        branchId: _branchId!,
+        branchId: '',
         serviceType: _serviceType,
         date: _date,
         presentMemberIds: _presentIds.toList(),
@@ -170,9 +155,7 @@ class _TakeAttendanceScreenState
   @override
   Widget build(BuildContext context) {
     final allMembers = ref.watch(memberProvider);
-    final branches = ref.watch(branchProvider);
     final user = ref.watch(appStateProvider).user!;
-    final isSuperAdmin = AppRoles.crossBranchRoles.contains(user.role);
 
     final branchMembers = _branchMembers(allMembers)
         .where((m) => m.isActive)
@@ -243,26 +226,6 @@ class _TakeAttendanceScreenState
                     ),
                   ),
                 ),
-                if (isSuperAdmin && branches.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _branchId,
-                    decoration: const InputDecoration(
-                      labelText: 'Branch',
-                      prefixIcon: Icon(Icons.account_tree),
-                      isDense: true,
-                    ),
-                    hint: const Text('Select branch'),
-                    items: branches
-                        .map((b) =>
-                            DropdownMenuItem(value: b.id, child: Text(b.name)))
-                        .toList(),
-                    onChanged: (v) => setState(() {
-                      _branchId = v;
-                      _presentIds.clear();
-                    }),
-                  ),
-                ],
                 // GPS Proximity Section
                 const SizedBox(height: 12),
                 SwitchListTile(
@@ -365,103 +328,91 @@ class _TakeAttendanceScreenState
           const Divider(height: 1),
 
           // Attendance header
-          if (_branchId != null) ...[
-            if (_enableGps)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline,
-                        color: Colors.blue, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'GPS self-check-in enabled. You can also manually mark members below.',
-                        style: GoogleFonts.poppins(
-                            fontSize: 12, color: Colors.blue.shade800),
-                      ),
-                    ),
-                  ],
-                ),
+          if (_enableGps)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Row(children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(
-                    '${_presentIds.intersection(branchMembers.map((m) => m.id).toSet()).length} / ${branchMembers.length} present',
-                    style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: AppColors.primary),
-                  ),
-                  Text('Active members',
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline,
+                      color: Colors.blue, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'GPS self-check-in enabled. You can also manually mark members below.',
                       style: GoogleFonts.poppins(
-                          fontSize: 11, color: AppColors.textSecondary)),
-                ]),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => _markAll(branchMembers, true),
-                  child: const Text('Mark All'),
-                ),
-                const SizedBox(width: 4),
-                TextButton(
-                  onPressed: () => _markAll(branchMembers, false),
-                  style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary),
-                  child: const Text('Clear'),
-                ),
-              ]),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                onChanged: (v) => setState(() => _search = v),
-                decoration: InputDecoration(
-                  hintText: 'Search members…',
-                  prefixIcon: const Icon(Icons.search),
-                  isDense: true,
-                  suffixIcon: _search.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () => setState(() => _search = ''),
-                        )
-                      : null,
-                ),
+                          fontSize: 12, color: Colors.blue.shade800),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-          ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Row(children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  '${_presentIds.intersection(branchMembers.map((m) => m.id).toSet()).length} / ${branchMembers.length} present',
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: AppColors.primary),
+                ),
+                Text('Active members',
+                    style: GoogleFonts.poppins(
+                        fontSize: 11, color: AppColors.textSecondary)),
+              ]),
+              const Spacer(),
+              TextButton(
+                onPressed: () => _markAll(branchMembers, true),
+                child: const Text('Mark All'),
+              ),
+              const SizedBox(width: 4),
+              TextButton(
+                onPressed: () => _markAll(branchMembers, false),
+                style: TextButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary),
+                child: const Text('Clear'),
+              ),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              onChanged: (v) => setState(() => _search = v),
+              decoration: InputDecoration(
+                hintText: 'Search members…',
+                prefixIcon: const Icon(Icons.search),
+                isDense: true,
+                suffixIcon: _search.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() => _search = ''),
+                      )
+                    : null,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
 
           Expanded(
-            child: _branchId == null
+            child: visibleMembers.isEmpty
                 ? Center(
                     child: Text(
-                      isSuperAdmin
-                          ? 'Select a branch to start'
-                          : 'No branch assigned to your account',
+                      _search.isEmpty
+                          ? 'No active members'
+                          : 'No results for "$_search"',
                       style: GoogleFonts.poppins(
                           color: AppColors.textSecondary),
                     ),
                   )
-                : visibleMembers.isEmpty
-                    ? Center(
-                        child: Text(
-                          _search.isEmpty
-                              ? 'No active members in this branch'
-                              : 'No results for "$_search"',
-                          style: GoogleFonts.poppins(
-                              color: AppColors.textSecondary),
-                        ),
-                      )
-                    : ListView.builder(
+                : ListView.builder(
                         padding:
                             const EdgeInsets.fromLTRB(16, 8, 16, 100),
                         itemCount: visibleMembers.length,

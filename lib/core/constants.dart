@@ -176,16 +176,9 @@ class AppRoles {
   static bool isChurchScoped(String? role) =>
       role != null && churchScopedRoles.contains(role);
 
-  /// Roles that oversee more than a single local church/branch — used to
-  /// show the cross-branch filter, branch tags, and branch selector on
-  /// finance, attendance, sermons, and events screens.
-  static const crossBranchRoles = {
-    superSystemAdmin,
-    nationalAdmin,
-    regionalAdmin,
-    districtAdmin,
-    areaAdmin,
-  };
+  /// Deprecated: branches have been removed. Everything operates at tenant
+  /// (church) level. Kept as empty set for backward compatibility.
+  static const crossBranchRoles = <String>{};
 
   /// Roles that can manage welfare cases (create, edit, delete, update status).
   static const welfareManagerRoles = {
@@ -312,32 +305,11 @@ class AppRoles {
     superSystemAdmin,
   };
 
-  /// Roles eligible to be assigned as a branch's lead pastor/administrator.
-  static const branchLeaderRoles = {
-    localChurchAdmin,
-    seniorPastor,
-    associatePastor,
-  };
+  /// Deprecated: branches have been removed. Kept as empty set for backward compatibility.
+  static const branchLeaderRoles = <String>{};
 
-  /// Roles scoped to a single local church/branch, requiring a branch
-  /// assignment when creating/editing a user account.
-  static const branchScopedRoles = {
-    localChurchAdmin,
-    seniorPastor,
-    associatePastor,
-    churchSecretary,
-    financeOfficer,
-    ministryHead,
-    youthMinistryHead,
-    menFellowshipHead,
-    womenFellowshipHead,
-    childrenMinistryHead,
-    welfareHead,
-    cellLeader,
-    volunteer,
-    member,
-    guest,
-  };
+  /// Deprecated: branches have been removed. Kept as empty set for backward compatibility.
+  static const branchScopedRoles = <String>{};
 
   /// Roles scoped to a specific department, requiring a department
   /// assignment when creating/editing a user account.

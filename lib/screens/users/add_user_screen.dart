@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants.dart';
-import '../../models/department.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/data_provider.dart';
 import '../../services/auth_service.dart';
@@ -24,7 +23,6 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
   final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   String _role = AppRoles.member;
-  String? _branchId;
   String? _departmentId;
   bool _loading = false;
   bool _obscure = true;
@@ -72,7 +70,7 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
         phone: _phoneCtrl.text.trim(),
         role: _role,
         churchId: appState.church?.id ?? "",
-        branchId: _branchId ?? '',
+        branchId: '',
         departmentId: _departmentId ?? '',
         dateOfBirth: _dob,
         gender: _gender,
@@ -104,11 +102,8 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final branches = ref.watch(branchProvider);
     final allDepts = ref.watch(departmentProvider);
-    final branchDepts = _branchId != null
-        ? allDepts.where((d) => d.branchId == _branchId).toList()
-        : allDepts;
+    final availableDepts = allDepts.toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Add User')),
@@ -283,30 +278,9 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
                   }
                 }),
               ),
-              if (branches.isNotEmpty) ...[
+              if (AppRoles.departmentScopedRoles.contains(_role)) ...[
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _branchId,
-                  decoration: const InputDecoration(
-                    labelText: 'Branch (optional)',
-                    prefixIcon: Icon(Icons.account_tree),
-                  ),
-                  hint: const Text('Select branch'),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('None')),
-                    ...branches.map((b) =>
-                        DropdownMenuItem(value: b.id, child: Text(b.name))),
-                  ],
-                  onChanged: (v) => setState(() {
-                    _branchId = v;
-                    _departmentId = null;
-                  }),
-                ),
-              ],
-              if (AppRoles.departmentScopedRoles.contains(_role) &&
-                  branchDepts.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                if (branchDepts.isEmpty)
+                if (availableDepts.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -320,7 +294,7 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
-                          'No departments in this branch. Create departments first.',
+                          'No departments available. Create departments first.',
                           style: GoogleFonts.poppins(
                               fontSize: 12, color: Colors.amber.shade800),
                         ),
@@ -335,7 +309,7 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
                       prefixIcon: Icon(Icons.groups_2_outlined),
                     ),
                     hint: const Text('Select department'),
-                    items: branchDepts
+                    items: availableDepts
                         .map((d) =>
                             DropdownMenuItem(value: d.id, child: Text(d.name)))
                         .toList(),

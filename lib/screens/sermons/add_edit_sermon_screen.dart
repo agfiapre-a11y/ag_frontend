@@ -34,7 +34,6 @@ class _AddEditSermonScreenState extends ConsumerState<AddEditSermonScreen> {
 
   String _serviceType = ServiceTypes.sundayService;
   DateTime _date = DateTime.now();
-  String? _branchId;
   bool _loading = false;
   Sermon? _existing;
 
@@ -57,13 +56,6 @@ class _AddEditSermonScreenState extends ConsumerState<AddEditSermonScreen> {
             ? _existing!.serviceType
             : ServiceTypes.sundayService;
         _date = _existing!.date;
-        _branchId = _existing!.branchId.isNotEmpty ? _existing!.branchId : null;
-      }
-    } else {
-      final user = ref.read(appStateProvider).user!;
-      if (!AppRoles.crossBranchRoles.contains(user.role) &&
-          user.branchId.isNotEmpty) {
-        _branchId = user.branchId;
       }
     }
   }
@@ -85,14 +77,6 @@ class _AddEditSermonScreenState extends ConsumerState<AddEditSermonScreen> {
 
     final appState = ref.read(appStateProvider);
     final user = appState.user!;
-    final isSuperAdmin = AppRoles.crossBranchRoles.contains(user.role);
-
-    if (isSuperAdmin && (_branchId == null || _branchId!.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a branch')),
-      );
-      return;
-    }
 
     setState(() => _loading = true);
     try {
@@ -107,12 +91,12 @@ class _AddEditSermonScreenState extends ConsumerState<AddEditSermonScreen> {
               videoUrl: _videoCtrl.text.trim(),
               serviceType: _serviceType,
               date: _date,
-              branchId: _branchId ?? user.branchId,
+              branchId: '',
             )
           : Sermon(
               id: _uuid.v4(),
               churchId: appState.church?.id ?? "",
-              branchId: _branchId ?? user.branchId,
+              branchId: '',
               title: _titleCtrl.text.trim(),
               speaker: _speakerCtrl.text.trim(),
               series: _seriesCtrl.text.trim(),
@@ -153,8 +137,6 @@ class _AddEditSermonScreenState extends ConsumerState<AddEditSermonScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(appStateProvider).user!;
-    final branches = ref.watch(branchProvider);
-    final isSuperAdmin = AppRoles.crossBranchRoles.contains(user.role);
 
     return Scaffold(
       appBar: AppBar(
@@ -233,24 +215,6 @@ class _AddEditSermonScreenState extends ConsumerState<AddEditSermonScreen> {
               const SizedBox(height: 12),
               _field(_videoCtrl, 'Video URL', Icons.play_circle_outline,
                   type: TextInputType.url),
-              if (isSuperAdmin && branches.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                _sectionLabel('Branch'),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _branchId,
-                  decoration: const InputDecoration(
-                    labelText: 'Branch *',
-                    prefixIcon: Icon(Icons.account_tree),
-                  ),
-                  hint: const Text('Select branch'),
-                  items: branches
-                      .map((b) =>
-                          DropdownMenuItem(value: b.id, child: Text(b.name)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _branchId = v),
-                ),
-              ],
               const SizedBox(height: 28),
               ElevatedButton(
                 onPressed: _loading ? null : _submit,

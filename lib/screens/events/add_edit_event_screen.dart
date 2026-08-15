@@ -33,7 +33,6 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
   late DateTime _startTime;
   late DateTime _endDate;
   late DateTime _endTime;
-  String? _branchId;
   bool _isSaving = false;
 
   ChurchEvent? _existing;
@@ -67,7 +66,6 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
         _startTime = _existing!.startDate;
         _endDate = _existing!.endDate;
         _endTime = _existing!.endDate;
-        _branchId = _existing!.branchId;
       }
     }
   }
@@ -154,7 +152,6 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
       final appState = ref.read(appStateProvider);
       final user = appState.user!;
       final churchId = appState.church?.id ?? "";
-      final branchId = _branchId ?? _existing?.branchId ?? user.branchId;
 
       final departmentId = user.role == AppRoles.ministryHead
           ? user.departmentId
@@ -163,7 +160,7 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
       final event = ChurchEvent(
         id: _existing?.id ?? const Uuid().v4(),
         churchId: churchId,
-        branchId: branchId,
+        branchId: '',
         departmentId: departmentId,
         title: _titleCtrl.text.trim(),
         description: _descCtrl.text.trim(),
@@ -194,8 +191,6 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(appStateProvider).user!;
-    final branches = ref.watch(branchProvider);
-    final isSuperAdmin = AppRoles.crossBranchRoles.contains(user.role);
 
     return Scaffold(
       appBar: AppBar(
@@ -334,25 +329,6 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
               maxLines: 4,
               textCapitalization: TextCapitalization.sentences,
             ),
-            if (isSuperAdmin && branches.isNotEmpty) ...[
-              const SizedBox(height: 24),
-              _SectionHeader('Branch'),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _branchId,
-                decoration: const InputDecoration(
-                  labelText: 'Branch *',
-                  prefixIcon: Icon(Icons.account_tree_outlined),
-                ),
-                items: [
-                  ...branches.map((b) =>
-                      DropdownMenuItem(value: b.id, child: Text(b.name))),
-                ],
-                onChanged: (v) => setState(() => _branchId = v),
-                validator: (v) =>
-                    v == null ? 'Please select a branch' : null,
-              ),
-            ],
             const SizedBox(height: 32),
             ElevatedButton.icon(
               onPressed: _isSaving ? null : _save,

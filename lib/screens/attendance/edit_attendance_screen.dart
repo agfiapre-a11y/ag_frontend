@@ -25,7 +25,6 @@ class _EditAttendanceScreenState
     extends ConsumerState<EditAttendanceScreen> {
   String _serviceType = ServiceTypes.sundayService;
   DateTime _date = DateTime.now();
-  String? _branchId;
   final Set<String> _presentIds = {};
   bool _loading = false;
   String _search = '';
@@ -48,7 +47,6 @@ class _EditAttendanceScreenState
       setState(() {
         _serviceType = record.serviceType;
         _date = record.date;
-        _branchId = record.branchId;
         _presentIds.addAll(record.presentMemberIds);
         _latitude = record.latitude;
         _longitude = record.longitude;
@@ -59,8 +57,7 @@ class _EditAttendanceScreenState
   }
 
   List<Member> _branchMembers(List<Member> all) {
-    if (_branchId == null || _branchId!.isEmpty) return all;
-    return all.where((m) => m.branchId == _branchId).toList();
+    return all;
   }
 
   List<Member> _filtered(List<Member> members) {
@@ -114,13 +111,6 @@ class _EditAttendanceScreenState
   }
 
   Future<void> _save() async {
-    if (_branchId == null || _branchId!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a branch')),
-      );
-      return;
-    }
-
     setState(() => _loading = true);
     try {
       final existingRecord = LocalDb.getAttendanceRecordById(widget.recordId);
@@ -131,7 +121,7 @@ class _EditAttendanceScreenState
       final updatedRecord = AttendanceRecord(
         id: existingRecord.id,
         churchId: existingRecord.churchId,
-        branchId: _branchId!,
+        branchId: '',
         serviceType: _serviceType,
         date: _date,
         presentMemberIds: _presentIds.toList(),
@@ -177,9 +167,7 @@ class _EditAttendanceScreenState
   @override
   Widget build(BuildContext context) {
     final allMembers = ref.watch(memberProvider);
-    final branches = ref.watch(branchProvider);
     final user = ref.watch(appStateProvider).user!;
-    final isSuperAdmin = AppRoles.crossBranchRoles.contains(user.role);
 
     final branchMembers = _branchMembers(allMembers)
         .where((m) => m.isActive)
@@ -250,26 +238,6 @@ class _EditAttendanceScreenState
                     ),
                   ),
                 ),
-                if (isSuperAdmin && branches.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _branchId,
-                    decoration: const InputDecoration(
-                      labelText: 'Branch',
-                      prefixIcon: Icon(Icons.account_tree),
-                      isDense: true,
-                    ),
-                    hint: const Text('Select branch'),
-                    items: branches
-                        .map((b) =>
-                            DropdownMenuItem(value: b.id, child: Text(b.name)))
-                        .toList(),
-                    onChanged: (v) => setState(() {
-                      _branchId = v;
-                      _presentIds.clear();
-                    }),
-                  ),
-                ],
                 // GPS Proximity Section
                 const SizedBox(height: 12),
                 SwitchListTile(
@@ -372,10 +340,9 @@ class _EditAttendanceScreenState
           const Divider(height: 1),
 
           // Attendance header
-          if (_branchId != null) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Row(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Row(children: [
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(
                     '${_presentIds.intersection(branchMembers.map((m) => m.id).toSet()).length} / ${branchMembers.length} present',
@@ -420,30 +387,19 @@ class _EditAttendanceScreenState
               ),
             ),
             const SizedBox(height: 4),
-          ],
 
           Expanded(
-            child: _branchId == null
+            child: visibleMembers.isEmpty
                 ? Center(
                     child: Text(
-                      isSuperAdmin
-                          ? 'Select a branch to start'
-                          : 'No branch assigned to your account',
+                      _search.isEmpty
+                          ? 'No active members'
+                          : 'No results for "$_search"',
                       style: GoogleFonts.poppins(
                           color: AppColors.textSecondary),
                     ),
                   )
-                : visibleMembers.isEmpty
-                    ? Center(
-                        child: Text(
-                          _search.isEmpty
-                              ? 'No active members in this branch'
-                              : 'No results for "$_search"',
-                          style: GoogleFonts.poppins(
-                              color: AppColors.textSecondary),
-                        ),
-                      )
-                    : ListView.builder(
+                : ListView.builder(
                         padding:
                             const EdgeInsets.fromLTRB(16, 8, 16, 100),
                         itemCount: visibleMembers.length,

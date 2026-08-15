@@ -72,116 +72,18 @@ final userProvider =
   return UserNotifier(churchId, crossChurch: _isCrossChurchRole(appState.user?.role));
 });
 
-// ── Branches ──────────────────────────────────────────────────────────────────
-
-class BranchNotifier extends StateNotifier<List<Branch>> {
-  final String churchId;
-  final String? organizationId;
-  final String? regionId;
-  final String? districtId;
-  final String? areaId;
-  final bool crossChurch;
-
-  BranchNotifier(
-    this.churchId, {
-    this.organizationId,
-    this.regionId,
-    this.districtId,
-    this.areaId,
-    this.crossChurch = false,
-  }) : super([]) {
-    _load();
-  }
-
-  void _load() {
-    final list = crossChurch
-        ? LocalDb.getAllBranchesAcrossChurches()
-        : LocalDb.getAllBranches(
-            churchId: churchId,
-            organizationId: organizationId,
-            regionId: regionId,
-            districtId: districtId,
-            areaId: areaId,
-          );
-    list.sort((a, b) => a.name.compareTo(b.name));
-    state = list;
-  }
-
-  Future<void> add({
-    required String name,
-    required String location,
-    required String pastorId,
-  }) async {
-    final branch = Branch(
-      id: _uuid.v4(),
-      churchId: churchId,
-      name: name,
-      location: location,
-      pastorId: pastorId,
-      createdAt: DateTime.now(),
-    );
-    await LocalDb.saveBranch(branch);
-    _load();
-  }
-
-  Future<void> update(Branch branch) async {
-    await LocalDb.saveBranch(branch);
-    _load();
-  }
-
-  Future<void> delete(String id) async {
-    await LocalDb.deleteBranch(id);
-    _load();
-  }
-
-  void refresh() => _load();
-}
+// ── Branches (deprecated — branches removed, always returns empty) ──────────
 
 final branchProvider =
-    StateNotifierProvider<BranchNotifier, List<Branch>>((ref) {
-  final appState = ref.watch(appStateProvider);
-  final churchId = appState.church?.id ?? '';
-  final user = appState.user;
-  String? organizationId, regionId, districtId, areaId;
-
-  // Apply hierarchical filtering based on user role
-  if (user?.role == AppRoles.nationalAdmin ||
-      user?.role == AppRoles.nationalExecutive) {
-    organizationId = user?.organizationId;
-  } else if (user?.role == AppRoles.regionalAdmin ||
-      user?.role == AppRoles.regionalBishop) {
-    organizationId = user?.organizationId;
-    regionId = user?.regionId;
-  } else if (user?.role == AppRoles.districtAdmin ||
-      user?.role == AppRoles.districtPastor) {
-    organizationId = user?.organizationId;
-    regionId = user?.regionId;
-    districtId = user?.districtId;
-  } else if (user?.role == AppRoles.areaAdmin ||
-      user?.role == AppRoles.localChurchAdmin ||
-      user?.role == AppRoles.seniorPastor ||
-      user?.role == AppRoles.associatePastor ||
-      user?.role == AppRoles.churchSecretary ||
-      user?.role == AppRoles.financeOfficer ||
-      user?.role == AppRoles.ministryHead ||
-      user?.role == AppRoles.cellLeader ||
-      user?.role == AppRoles.volunteer ||
-      user?.role == AppRoles.member) {
-    organizationId = user?.organizationId;
-    regionId = user?.regionId;
-    districtId = user?.districtId;
-    areaId = user?.areaId;
-  }
-
-  return BranchNotifier(
-    churchId,
-    organizationId: organizationId,
-    regionId: regionId,
-    districtId: districtId,
-    areaId: areaId,
-    crossChurch: _isCrossChurchRole(user?.role),
-  );
+    StateNotifierProvider<BranchStubNotifier, List<Branch>>((ref) {
+  return BranchStubNotifier();
 });
+
+class BranchStubNotifier extends StateNotifier<List<Branch>> {
+  BranchStubNotifier() : super([]);
+
+  void refresh() {}
+}
 
 // ── Departments ───────────────────────────────────────────────────────────────
 

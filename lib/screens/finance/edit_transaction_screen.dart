@@ -28,7 +28,6 @@ class _EditTransactionScreenState
   String _type = TransactionType.income;
   String _category = IncomeCategories.tithe;
   DateTime _date = DateTime.now();
-  String? _branchId;
   bool _loading = false;
   bool _isRecurring = false;
   String _recurrenceInterval = RecurrenceInterval.monthly;
@@ -47,7 +46,6 @@ class _EditTransactionScreenState
         _type = tx.type;
         _category = tx.category;
         _date = tx.date;
-        _branchId = tx.branchId;
         _amountCtrl.text = tx.amount.toString();
         _descCtrl.text = tx.description;
         _isRecurring = tx.isRecurring;
@@ -82,14 +80,6 @@ class _EditTransactionScreenState
 
     final appState = ref.read(appStateProvider);
     final user = appState.user!;
-    final isSystemLevel = AppRoles.crossBranchRoles.contains(user.role);
-
-    if (isSystemLevel && (_branchId == null || _branchId!.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a branch')),
-      );
-      return;
-    }
 
     final amount = double.tryParse(
         _amountCtrl.text.trim().replaceAll(',', ''));
@@ -110,7 +100,7 @@ class _EditTransactionScreenState
       final updatedTx = FinanceTransaction(
         id: existingTx.id,
         churchId: existingTx.churchId,
-        branchId: _branchId ?? existingTx.branchId,
+        branchId: '',
         type: _type,
         category: _category,
         amount: amount,
@@ -150,8 +140,6 @@ class _EditTransactionScreenState
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(appStateProvider).user!;
-    final branches = ref.watch(branchProvider);
-    final isSystemLevel = AppRoles.crossBranchRoles.contains(user.role);
     final isIncome = _type == TransactionType.income;
     final typeColor = isIncome ? AppColors.success : AppColors.error;
 
@@ -333,26 +321,6 @@ class _EditTransactionScreenState
                       .map((r) => DropdownMenuItem(value: r, child: Text(RecurrenceInterval.label(r))))
                       .toList(),
                   onChanged: (v) => setState(() => _recurrenceInterval = v!),
-                ),
-              ],
-
-              // Branch selector (superAdmin only)
-              if (isSystemLevel && branches.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                _sectionLabel('Branch'),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _branchId,
-                  decoration: const InputDecoration(
-                    labelText: 'Branch *',
-                    prefixIcon: Icon(Icons.account_tree),
-                  ),
-                  hint: const Text('Select branch'),
-                  items: branches
-                      .map((b) =>
-                          DropdownMenuItem(value: b.id, child: Text(b.name)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _branchId = v),
                 ),
               ],
 

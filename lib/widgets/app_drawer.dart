@@ -99,10 +99,6 @@ class AppDrawer extends ConsumerWidget {
                       label: 'Members',
                       route: '/members'),
                   _EmeraldNavItem(
-                      icon: Icons.account_tree_outlined,
-                      label: 'Branches',
-                      route: '/branches'),
-                  _EmeraldNavItem(
                       icon: Icons.groups_2_outlined,
                       label: 'Departments',
                       route: '/departments'),
@@ -152,10 +148,6 @@ class AppDrawer extends ConsumerWidget {
                       icon: Icons.people_outline,
                       label: 'Members',
                       route: '/members'),
-                  _EmeraldNavItem(
-                      icon: Icons.account_tree_outlined,
-                      label: 'Branches',
-                      route: '/branches'),
                   _EmeraldNavItem(
                       icon: Icons.groups_2_outlined,
                       label: 'Departments',
@@ -228,10 +220,6 @@ class AppDrawer extends ConsumerWidget {
                       label: 'Members',
                       route: '/members'),
                   _EmeraldNavItem(
-                      icon: Icons.account_tree_outlined,
-                      label: 'Branches',
-                      route: '/branches'),
-                  _EmeraldNavItem(
                       icon: Icons.groups_2_outlined,
                       label: 'Departments',
                       route: '/departments'),
@@ -268,10 +256,6 @@ class AppDrawer extends ConsumerWidget {
                       icon: Icons.location_city_outlined,
                       label: 'Districts',
                       route: '/districts'),
-                  _EmeraldNavItem(
-                      icon: Icons.account_tree_outlined,
-                      label: 'Branches',
-                      route: '/branches'),
                   const SizedBox(height: 16),
                   _EmeraldNavItem(
                       icon: Icons.people_outline,
@@ -303,10 +287,6 @@ class AppDrawer extends ConsumerWidget {
                       icon: Icons.people_outline,
                       label: 'Members',
                       route: '/members'),
-                  _EmeraldNavItem(
-                      icon: Icons.account_tree_outlined,
-                      label: 'Branches',
-                      route: '/branches'),
                   _EmeraldNavItem(
                       icon: Icons.groups_2_outlined,
                       label: 'Departments',
@@ -342,10 +322,6 @@ class AppDrawer extends ConsumerWidget {
                 if (role == AppRoles.districtPastor) ...[
                   const SizedBox(height: 16),
                   _EmeraldNavItem(
-                      icon: Icons.account_tree_outlined,
-                      label: 'Branches',
-                      route: '/branches'),
-                  _EmeraldNavItem(
                       icon: Icons.people_outline,
                       label: 'Members',
                       route: '/members'),
@@ -371,10 +347,6 @@ class AppDrawer extends ConsumerWidget {
                       icon: Icons.people_outline,
                       label: 'Members',
                       route: '/members'),
-                  _EmeraldNavItem(
-                      icon: Icons.account_tree_outlined,
-                      label: 'Branches',
-                      route: '/branches'),
                   _EmeraldNavItem(
                       icon: Icons.groups_2_outlined,
                       label: 'Departments',
@@ -413,10 +385,6 @@ class AppDrawer extends ConsumerWidget {
                       icon: Icons.people_outline,
                       label: 'Members',
                       route: '/members'),
-                  _EmeraldNavItem(
-                      icon: Icons.account_tree_outlined,
-                      label: 'Branches',
-                      route: '/branches'),
                   _EmeraldNavItem(
                       icon: Icons.groups_2_outlined,
                       label: 'Departments',
