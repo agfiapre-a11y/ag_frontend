@@ -239,9 +239,9 @@ final departmentProvider =
   final churchId = appState.church?.id ?? '';
   final user = appState.user;
   String? branchFilter;
-  if (user?.role == AppRoles.pastor && (user?.branchId.isNotEmpty ?? false)) {
+  if (user?.role == AppRoles.seniorPastor && (user?.branchId.isNotEmpty ?? false)) {
     branchFilter = user?.branchId;
-  } else if (user?.role == AppRoles.deptLeader &&
+  } else if (user?.role == AppRoles.ministryHead &&
       (user?.branchId.isNotEmpty ?? false)) {
     branchFilter = user?.branchId;
   }

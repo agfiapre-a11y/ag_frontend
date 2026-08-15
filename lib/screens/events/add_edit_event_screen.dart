@@ -156,7 +156,7 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
       final churchId = appState.church?.id ?? "";
       final branchId = _branchId ?? _existing?.branchId ?? user.branchId;
 
-      final departmentId = user.role == AppRoles.deptLeader
+      final departmentId = user.role == AppRoles.ministryHead
           ? user.departmentId
           : (_existing?.departmentId ?? '');
 

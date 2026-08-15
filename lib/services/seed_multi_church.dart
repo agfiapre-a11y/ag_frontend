@@ -267,7 +267,7 @@ class SeedMultiChurch {
       name: pastorName,
       email: 'pastor@${template.email.split('@').last}',
       passwordHash: AuthService.hashPassword(defaultPassword),
-      role: AppRoles.pastor,
+      role: AppRoles.seniorPastor,
       churchId: churchId,
       branchId: branchId,
       phone: template.phone,

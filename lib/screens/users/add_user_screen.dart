@@ -23,7 +23,7 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
-  String _role = AppRoles.pastor;
+  String _role = AppRoles.member;
   String? _branchId;
   String? _departmentId;
   bool _loading = false;

@@ -42,10 +42,10 @@ class DepartmentDetailScreen extends ConsumerWidget {
     final members = LocalDb.getAllMembers(departmentId: deptId);
     final activeCount = members.where((m) => m.isActive).length;
 
-    // Department leader (user with deptLeader role + this deptId)
+    // Department leader (user with ministryHead role + this deptId)
     final leaders = allUsers
         .where((u) =>
-            u.role == AppRoles.deptLeader && u.departmentId == deptId)
+            u.role == AppRoles.ministryHead && u.departmentId == deptId)
         .toList();
 
     // Upcoming events for this dept

@@ -65,9 +65,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
               const PopupMenuItem(value: AppRoles.volunteer, child: Text('Volunteer')),
               const PopupMenuItem(value: AppRoles.member, child: Text('Member')),
               const PopupMenuItem(value: AppRoles.guest, child: Text('Guest')),
-              const PopupMenuItem(value: AppRoles.superAdmin, child: Text('Super Admin (Legacy)')),
-              const PopupMenuItem(value: AppRoles.pastor, child: Text('Pastor (Legacy)')),
-              const PopupMenuItem(value: AppRoles.accountant, child: Text('Accountant (Legacy)')),
             ],
           ),
         ],
@@ -100,7 +97,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
               children: [
                 _StatChip(icon: Icons.people, label: 'Total', value: '${users.length}', color: AppColors.primary),
                 const SizedBox(width: 8),
-                _StatChip(icon: Icons.admin_panel_settings, label: 'Admins', value: '${users.where((u) => u.role.contains('Admin') || u.role == AppRoles.superAdmin).length}', color: Colors.orange),
+                _StatChip(icon: Icons.admin_panel_settings, label: 'Admins', value: '${users.where((u) => u.role.contains('Admin')).length}', color: Colors.orange),
                 const SizedBox(width: 8),
                 _StatChip(icon: Icons.badge, label: 'Staff', value: '${users.where((u) => [AppRoles.financeOfficer, AppRoles.churchSecretary, AppRoles.welfareHead, AppRoles.seniorPastor, AppRoles.associatePastor].contains(u.role)).length}', color: Colors.teal),
                 const SizedBox(width: 8),
@@ -352,11 +349,12 @@ class _UserTile extends ConsumerWidget {
 
   Color _roleColor(String role) {
     switch (role) {
-      case AppRoles.superAdmin:
+      case AppRoles.superSystemAdmin:
         return AppColors.sunriseGold;
-      case AppRoles.pastor:
+      case AppRoles.seniorPastor:
+      case AppRoles.associatePastor:
         return AppColors.royalBlue;
-      case AppRoles.accountant:
+      case AppRoles.financeOfficer:
         return AppColors.skyBlue;
       default:
         return AppColors.paradiseGray;

@@ -39,11 +39,11 @@ class SeedDataService {
     await _seedUsers(
       churchId,
       [
-        (pastor1Id, branch1Id, AppRoles.pastor, 'Rev. John Mensah'),
-        (pastor2Id, branch2Id, AppRoles.pastor, 'Rev. Sarah Osei'),
-        (pastor3Id, branch3Id, AppRoles.pastor, 'Rev. Emmanuel Kofi'),
-        (accountantId, '', AppRoles.accountant, 'Grace Amoah'),
-        (deptLeaderId, branch1Id, AppRoles.deptLeader, 'Daniel Addo'),
+        (pastor1Id, branch1Id, AppRoles.seniorPastor, 'Rev. John Mensah'),
+        (pastor2Id, branch2Id, AppRoles.associatePastor, 'Rev. Sarah Osei'),
+        (pastor3Id, branch3Id, AppRoles.associatePastor, 'Rev. Emmanuel Kofi'),
+        (accountantId, '', AppRoles.financeOfficer, 'Grace Amoah'),
+        (deptLeaderId, branch1Id, AppRoles.ministryHead, 'Daniel Addo'),
       ],
     );
 
@@ -98,7 +98,7 @@ class SeedDataService {
     // Keep only super admin user
     final allUsers = LocalDb.getAllUsers();
     for (final user in allUsers) {
-      if (user.role != AppRoles.superAdmin) {
+      if (user.role != AppRoles.superSystemAdmin) {
         await LocalDb.deleteUser(user.id);
       }
     }
@@ -146,7 +146,7 @@ class SeedDataService {
         id: id,
         churchId: churchId,
         branchId: branchId,
-        departmentId: role == AppRoles.deptLeader ? '' : '',
+        departmentId: role == AppRoles.ministryHead ? '' : '',
         name: name,
         email: '${name.toLowerCase().replaceAll(' ', '.')}@paradiseag.com',
         passwordHash: AuthService.hashPassword('Password123'),
