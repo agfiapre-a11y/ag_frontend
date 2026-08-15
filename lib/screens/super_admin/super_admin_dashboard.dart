@@ -322,7 +322,7 @@ class _SuperAdminDashboardState extends ConsumerState<SuperAdminDashboard>
               final err = await ref
                   .read(superAdminProvider.notifier)
                   .deleteTenant(tenant.id);
-              if (mounted) {
+              if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content: Text(err ?? 'Church deactivated successfully'),
                   backgroundColor: err != null ? AppColors.error : AppColors.primary,
@@ -364,7 +364,7 @@ class _TenantCard extends StatelessWidget {
           child: tenant.logoUrl != null
               ? ClipOval(
                   child: Image.network(tenant.logoUrl!,
-                      fit: BoxFit.cover, errorBuilder: (_, __, ___) {
+                      fit: BoxFit.cover, errorBuilder: (_, _, _) {
                     return Text(tenant.name.substring(0, 1).toUpperCase(),
                         style: GoogleFonts.poppins(
                             color: Colors.white, fontWeight: FontWeight.bold));
@@ -862,7 +862,7 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _subscriptionTier,
+                  initialValue: _subscriptionTier,
                   decoration: const InputDecoration(
                     labelText: 'Subscription Tier',
                     prefixIcon: Icon(Icons.star),

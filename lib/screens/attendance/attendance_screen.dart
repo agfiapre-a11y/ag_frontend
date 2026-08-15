@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants.dart';
 import '../../models/attendance_record.dart';
-import '../../models/member.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/data_provider.dart';
 import '../../widgets/responsive_scaffold.dart';
@@ -262,7 +261,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                               color: AppColors.textSecondary, fontSize: 15)),
                       const SizedBox(height: 4),
                       Text(
-                          'Tap \"Record Attendance\" to create your first session',
+                          'Tap "Record Attendance" to create your first session',
                           style: GoogleFonts.poppins(
                               color: Colors.grey.shade500, fontSize: 12)),
                       if (canRecord) ...[

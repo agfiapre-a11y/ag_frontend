@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../core/constants.dart';
 import '../../models/attendance_record.dart';
 import '../../models/member.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/data_provider.dart';
 import '../../services/local_db.dart';
 import '../../services/gps_service.dart';
@@ -251,7 +250,7 @@ class _EditAttendanceScreenState
                     'Members can check in from their phone within the set radius',
                     style: GoogleFonts.poppins(fontSize: 11),
                   ),
-                  activeColor: AppColors.primary,
+                  activeThumbColor: AppColors.primary,
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                 ),
@@ -322,7 +321,7 @@ class _EditAttendanceScreenState
                     min: 10,
                     max: 500,
                     divisions: 49,
-                    activeColor: AppColors.primary,
+                    thumbColor: AppColors.primary,
                     label: '${_proximityRadius}m',
                     onChanged: (v) =>
                         setState(() => _proximityRadius = v.round()),

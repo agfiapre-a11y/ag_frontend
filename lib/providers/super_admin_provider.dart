@@ -68,16 +68,16 @@ class SuperAdminNotifier extends StateNotifier<SuperAdminState> {
       final body = <String, dynamic>{
         'name': name,
         'slug': slug,
-        if (address != null) 'address': address,
-        if (phone != null) 'phone': phone,
-        if (email != null) 'email': email,
-        if (primaryColor != null) 'primaryColor': primaryColor,
-        if (secondaryColor != null) 'secondaryColor': secondaryColor,
-        if (maxMembers != null) 'maxMembers': maxMembers,
-        if (maxBranches != null) 'maxBranches': maxBranches,
-        if (subscriptionTier != null) 'subscriptionTier': subscriptionTier,
-        if (subscriptionExpiry != null) 'subscriptionExpiry': subscriptionExpiry,
-        if (enabledModules != null) 'enabledModules': enabledModules,
+        'address': ?address,
+        'phone': ?phone,
+        'email': ?email,
+        'primaryColor': ?primaryColor,
+        'secondaryColor': ?secondaryColor,
+        'maxMembers': ?maxMembers,
+        'maxBranches': ?maxBranches,
+        'subscriptionTier': ?subscriptionTier,
+        'subscriptionExpiry': ?subscriptionExpiry,
+        'enabledModules': ?enabledModules,
       };
       final tenantResp = await ApiClient().post('/tenants', body);
       final tenant = TenantConfig.fromJson(tenantResp);

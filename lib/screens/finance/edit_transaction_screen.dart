@@ -139,7 +139,6 @@ class _EditTransactionScreenState
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(appStateProvider).user!;
     final isIncome = _type == TransactionType.income;
     final typeColor = isIncome ? AppColors.success : AppColors.error;
 

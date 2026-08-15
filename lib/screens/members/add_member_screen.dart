@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants.dart';
-import '../../models/member.dart';
 import '../../providers/data_provider.dart';
 import '../../services/movement_classifier.dart';
 

@@ -18,7 +18,6 @@ class LandingPage extends ConsumerStatefulWidget {
 class _LandingPageState extends ConsumerState<LandingPage> {
   List<TenantConfig> _churches = [];
   bool _loading = true;
-  String? _error;
 
   @override
   void initState() {
@@ -130,7 +129,7 @@ class _LandingPageState extends ConsumerState<LandingPage> {
                     child: Image.asset(
                       'assets/images/banner2.png',
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(),
+                      errorBuilder: (_, _, _) => const SizedBox(),
                     ),
                   ),
                 ),
@@ -438,7 +437,7 @@ class _LandingPageState extends ConsumerState<LandingPage> {
               child: Image.asset(
                 'assets/images/banner2.png',
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Center(
+                errorBuilder: (_, _, _) => Center(
                   child: Icon(Icons.church, size: 80, color: Colors.white.withValues(alpha: 0.3)),
                 ),
               ),
@@ -1195,7 +1194,7 @@ class _ChurchCard extends StatelessWidget {
                                 fit: BoxFit.cover,
                                 width: 40,
                                 height: 40,
-                                errorBuilder: (_, __, ___) => Text(
+                                errorBuilder: (_, _, _) => Text(
                                     tenant.name.substring(0, 1).toUpperCase(),
                                     style: GoogleFonts.poppins(
                                         color: Colors.white,

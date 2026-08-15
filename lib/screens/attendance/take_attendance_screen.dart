@@ -239,7 +239,7 @@ class _TakeAttendanceScreenState
                     'Members can check in from their phone within the set radius',
                     style: GoogleFonts.poppins(fontSize: 11),
                   ),
-                  activeColor: AppColors.primary,
+                  activeThumbColor: AppColors.primary,
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                 ),
@@ -310,7 +310,7 @@ class _TakeAttendanceScreenState
                     min: 10,
                     max: 500,
                     divisions: 49,
-                    activeColor: AppColors.primary,
+                    thumbColor: AppColors.primary,
                     label: '${_proximityRadius}m',
                     onChanged: (v) =>
                         setState(() => _proximityRadius = v.round()),

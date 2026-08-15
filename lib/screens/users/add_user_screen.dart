@@ -147,7 +147,7 @@ class _AddUserScreenState extends ConsumerState<AddUserScreen> {
                       style: GoogleFonts.poppins(color: AppColors.textSecondary))
                 else
                   DropdownButtonFormField<TenantConfig>(
-                    value: _selectedTenant,
+                    initialValue: _selectedTenant,
                     decoration: const InputDecoration(
                       labelText: 'Assign to Church *',
                       prefixIcon: Icon(Icons.church),

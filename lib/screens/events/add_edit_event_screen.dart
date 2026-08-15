@@ -190,8 +190,6 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(appStateProvider).user!;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEdit ? 'Edit Event' : 'New Event'),

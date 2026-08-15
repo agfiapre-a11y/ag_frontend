@@ -136,8 +136,6 @@ class _AddEditSermonScreenState extends ConsumerState<AddEditSermonScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(appStateProvider).user!;
-
     return Scaffold(
       appBar: AppBar(
           title: Text(_isEdit ? 'Edit Sermon' : 'Add Sermon')),
