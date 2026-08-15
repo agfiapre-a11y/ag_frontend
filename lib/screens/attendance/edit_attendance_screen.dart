@@ -9,6 +9,7 @@ import '../../models/member.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/data_provider.dart';
 import '../../services/local_db.dart';
+import '../../services/gps_service.dart';
 
 class EditAttendanceScreen extends ConsumerStatefulWidget {
   final String recordId;
@@ -28,6 +29,12 @@ class _EditAttendanceScreenState
   final Set<String> _presentIds = {};
   bool _loading = false;
   String _search = '';
+  // GPS fields
+  double? _latitude;
+  double? _longitude;
+  int _proximityRadius = 100;
+  bool _enableGps = false;
+  bool _gpsLoading = false;
 
   @override
   void initState() {
@@ -43,6 +50,10 @@ class _EditAttendanceScreenState
         _date = record.date;
         _branchId = record.branchId;
         _presentIds.addAll(record.presentMemberIds);
+        _latitude = record.latitude;
+        _longitude = record.longitude;
+        _proximityRadius = record.proximityRadius;
+        _enableGps = record.latitude != null && record.longitude != null;
       });
     }
   }
@@ -72,6 +83,36 @@ class _EditAttendanceScreenState
     });
   }
 
+  Future<void> _captureGps() async {
+    setState(() => _gpsLoading = true);
+    try {
+      final loc = await GpsService.getCurrentLocation();
+      setState(() {
+        _latitude = loc.latitude;
+        _longitude = loc.longitude;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('GPS location captured'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _gpsLoading = false);
+    }
+  }
+
   Future<void> _save() async {
     if (_branchId == null || _branchId!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,9 +137,9 @@ class _EditAttendanceScreenState
         presentMemberIds: _presentIds.toList(),
         recordedById: existingRecord.recordedById,
         createdAt: existingRecord.createdAt,
-        latitude: existingRecord.latitude,
-        longitude: existingRecord.longitude,
-        proximityRadius: existingRecord.proximityRadius,
+        latitude: _enableGps ? _latitude : null,
+        longitude: _enableGps ? _longitude : null,
+        proximityRadius: _enableGps ? _proximityRadius : 100,
         isActive: existingRecord.isActive,
       );
       final error = await ref.read(attendanceProvider.notifier).update(updatedRecord);
@@ -227,6 +268,102 @@ class _EditAttendanceScreenState
                       _branchId = v;
                       _presentIds.clear();
                     }),
+                  ),
+                ],
+                // GPS Proximity Section
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  value: _enableGps,
+                  onChanged: (v) => setState(() => _enableGps = v),
+                  title: Text(
+                    'Enable GPS Self-Check-In',
+                    style: GoogleFonts.poppins(
+                        fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    'Members can check in from their phone within the set radius',
+                    style: GoogleFonts.poppins(fontSize: 11),
+                  ),
+                  activeColor: AppColors.primary,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+                if (_enableGps) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _gpsLoading ? null : _captureGps,
+                          icon: _gpsLoading
+                              ? const SizedBox(
+                                  height: 16,
+                                  width: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))
+                              : const Icon(Icons.my_location),
+                          label: Text(
+                            _latitude != null
+                                ? 'Location Captured'
+                                : 'Capture My Location',
+                            style: GoogleFonts.poppins(fontSize: 13),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _latitude != null
+                                ? AppColors.success
+                                : AppColors.primary,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_latitude != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on,
+                              color: Colors.green, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Lat: ${_latitude!.toStringAsFixed(6)}, Lng: ${_longitude!.toStringAsFixed(6)}',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 12, color: Colors.green.shade800),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Text(
+                    'Proximity Radius: ${_proximityRadius}m',
+                    style: GoogleFonts.poppins(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  Slider(
+                    value: _proximityRadius.toDouble(),
+                    min: 10,
+                    max: 500,
+                    divisions: 49,
+                    activeColor: AppColors.primary,
+                    label: '${_proximityRadius}m',
+                    onChanged: (v) =>
+                        setState(() => _proximityRadius = v.round()),
+                  ),
+                  Text(
+                    'Members within ${_proximityRadius}m of this location can mark themselves present from their device.',
+                    style: GoogleFonts.poppins(
+                        fontSize: 11, color: AppColors.textSecondary),
                   ),
                 ],
               ],

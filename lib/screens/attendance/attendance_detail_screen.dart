@@ -137,6 +137,19 @@ class AttendanceDetailScreen extends ConsumerWidget {
                               color: Colors.white54, fontSize: 11)),
                     ]),
                   ],
+                  if (record.latitude != null && record.longitude != null) ...[
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      const Icon(Icons.location_on,
+                          size: 13, color: Colors.greenAccent),
+                      const SizedBox(width: 4),
+                      Text(
+                        'GPS: ${record.latitude!.toStringAsFixed(4)}, ${record.longitude!.toStringAsFixed(4)} (${record.proximityRadius}m radius)',
+                        style: GoogleFonts.poppins(
+                            color: Colors.greenAccent, fontSize: 11),
+                      ),
+                    ]),
+                  ],
                 ],
               ),
             ),
