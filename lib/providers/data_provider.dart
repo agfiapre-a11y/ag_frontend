@@ -21,6 +21,9 @@ import '../models/contribution.dart';
 import '../models/budget.dart';
 import '../models/finance_approval.dart';
 import '../models/app_notification.dart';
+import '../models/library_book.dart';
+import '../models/devotion_guide.dart';
+import '../models/bible_study_resource.dart';
 import '../core/constants.dart';
 import '../services/local_db.dart';
 import '../services/movement_classifier.dart';
@@ -583,6 +586,123 @@ final sermonProvider =
   final churchId = appState.church?.id ?? '';
   final user = appState.user;
   return SermonNotifier(churchId, null,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Library: Digital Books ──────────────────────────────────────────────────
+
+class LibraryBookNotifier extends StateNotifier<List<LibraryBook>> {
+  final String churchId;
+  final bool crossChurch;
+
+  LibraryBookNotifier(this.churchId, {this.crossChurch = false}) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllLibraryBooksAcrossChurches()
+        : LocalDb.getAllLibraryBooks(churchId: churchId);
+  }
+
+  Future<void> save(LibraryBook book) async {
+    await LocalDb.saveLibraryBook(book);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteLibraryBook(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final libraryBookProvider =
+    StateNotifierProvider<LibraryBookNotifier, List<LibraryBook>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  return LibraryBookNotifier(churchId,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Library: Daily Devotion & Prayer Guide ───────────────────────────────────
+
+class DevotionGuideNotifier extends StateNotifier<List<DevotionGuide>> {
+  final String churchId;
+  final bool crossChurch;
+
+  DevotionGuideNotifier(this.churchId, {this.crossChurch = false})
+      : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllDevotionGuidesAcrossChurches()
+        : LocalDb.getAllDevotionGuides(churchId: churchId);
+  }
+
+  Future<void> save(DevotionGuide devotion) async {
+    await LocalDb.saveDevotionGuide(devotion);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteDevotionGuide(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final devotionGuideProvider =
+    StateNotifierProvider<DevotionGuideNotifier, List<DevotionGuide>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  return DevotionGuideNotifier(churchId,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Library: Bible Study Resources ───────────────────────────────────────────
+
+class BibleStudyResourceNotifier
+    extends StateNotifier<List<BibleStudyResource>> {
+  final String churchId;
+  final bool crossChurch;
+
+  BibleStudyResourceNotifier(this.churchId, {this.crossChurch = false})
+      : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllBibleStudyResourcesAcrossChurches()
+        : LocalDb.getAllBibleStudyResources(churchId: churchId);
+  }
+
+  Future<void> save(BibleStudyResource study) async {
+    await LocalDb.saveBibleStudyResource(study);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteBibleStudyResource(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final bibleStudyResourceProvider = StateNotifierProvider<
+    BibleStudyResourceNotifier, List<BibleStudyResource>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  return BibleStudyResourceNotifier(churchId,
       crossChurch: _isCrossChurchRole(user?.role));
 });
 

@@ -36,6 +36,9 @@ class SyncService {
     HiveBoxes.contributions: 'contributions',
     HiveBoxes.budgets: 'budgets',
     HiveBoxes.financeApprovals: 'finance_approvals',
+    HiveBoxes.libraryBooks: 'library_books',
+    HiveBoxes.devotionGuides: 'devotion_guides',
+    HiveBoxes.bibleStudyResources: 'bible_study_resources',
   };
 
   // ── Queue Management ──────────────────────────────────────────────────────

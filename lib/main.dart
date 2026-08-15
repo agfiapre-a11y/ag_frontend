@@ -9,6 +9,7 @@ import 'services/supabase_config.dart';
 import 'services/seed_data_service.dart';
 import 'services/seed_role_users.dart';
 import 'services/seed_multi_church.dart';
+import 'services/library_seed_data.dart';
 import 'services/tenant_context.dart';
 import 'providers/tenant_provider.dart';
 
@@ -80,6 +81,30 @@ Future<void> main() async {
         await LocalDb.prefs.setBool('has_seeded', true);
       } catch (e, st) {
         debugPrint('SEED ERROR: $e\n$st');
+      }
+    }
+
+    // Seed the Library (digital books, devotions, Bible studies) once per
+    // church — separate flag so it also backfills churches created before
+    // this feature existed, without re-running the rest of the seed data.
+    final hasSeededLibrary = LocalDb.prefs.getBool('has_seeded_library') ?? false;
+    if (!hasSeededLibrary) {
+      try {
+        final allChurches = LocalDb.getAllChurches();
+        for (final church in allChurches) {
+          await LocalDb.setActiveChurch(church.id);
+          TenantContext.setActiveChurch(church.id);
+          if (LocalDb.getAllLibraryBooks(churchId: church.id).isEmpty) {
+            await LibrarySeedData.seedForChurch(church.id);
+          }
+        }
+        if (allChurches.isNotEmpty) {
+          await LocalDb.setActiveChurch(allChurches.first.id);
+          TenantContext.setActiveChurch(allChurches.first.id);
+        }
+        await LocalDb.prefs.setBool('has_seeded_library', true);
+      } catch (e, st) {
+        debugPrint('LIBRARY SEED ERROR: $e\n$st');
       }
     }
 

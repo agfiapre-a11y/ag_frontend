@@ -65,6 +65,12 @@ class AppDrawer extends ConsumerWidget {
                     label: 'Dashboard',
                     route: '/home'),
 
+                // Library — available to every authenticated user
+                _EmeraldNavItem(
+                    icon: Icons.local_library_outlined,
+                    label: 'Library',
+                    route: '/library'),
+
                 const SizedBox(height: 16),
 
                 // ── Super System Administrator ───────────────────────────

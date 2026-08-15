@@ -101,6 +101,55 @@ CREATE TABLE IF NOT EXISTS sermons (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ── Library: Digital Books ──────────────────────────────────────────────────
+-- Note: columns are quoted camelCase to match the JSON keys produced by
+-- LibraryBook.toMap() in the Flutter app (id, churchId, title, author, ...).
+CREATE TABLE IF NOT EXISTS library_books (
+  id TEXT PRIMARY KEY,
+  "churchId" TEXT NOT NULL REFERENCES churches(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  author TEXT,
+  category TEXT,
+  description TEXT,
+  url TEXT,
+  "coverColor" TEXT,
+  source TEXT,
+  "addedById" TEXT,
+  "createdAt" TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── Library: Daily Devotion & Prayer Guide ───────────────────────────────────
+CREATE TABLE IF NOT EXISTS devotion_guides (
+  id TEXT PRIMARY KEY,
+  "churchId" TEXT NOT NULL REFERENCES churches(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  "scriptureReference" TEXT,
+  "scriptureText" TEXT,
+  content TEXT,
+  "prayerPoints" JSONB,
+  author TEXT,
+  date TIMESTAMPTZ,
+  "addedById" TEXT,
+  "createdAt" TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── Library: Bible Study Resources ───────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bible_study_resources (
+  id TEXT PRIMARY KEY,
+  "churchId" TEXT NOT NULL REFERENCES churches(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  category TEXT,
+  description TEXT,
+  "scriptureReferences" TEXT,
+  content TEXT,
+  "discussionQuestions" JSONB,
+  "addedById" TEXT,
+  "createdAt" TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── Transactions (Finance) ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY,
@@ -246,6 +295,9 @@ CREATE INDEX IF NOT EXISTS idx_ministry_fin_church ON ministry_finance(church_id
 CREATE INDEX IF NOT EXISTS idx_contributions_church ON contributions(church_id);
 CREATE INDEX IF NOT EXISTS idx_budgets_church ON budgets(church_id);
 CREATE INDEX IF NOT EXISTS idx_finance_approvals_church ON finance_approvals(church_id);
+CREATE INDEX IF NOT EXISTS idx_library_books_church ON library_books("churchId");
+CREATE INDEX IF NOT EXISTS idx_devotion_guides_church ON devotion_guides("churchId");
+CREATE INDEX IF NOT EXISTS idx_bible_study_church ON bible_study_resources("churchId");
 
 -- ── Row Level Security (RLS) ────────────────────────────────────────────────
 -- Enable RLS on all church-scoped tables
@@ -264,6 +316,9 @@ ALTER TABLE ministry_finance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contributions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budgets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE finance_approvals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE library_books ENABLE ROW LEVEL SECURITY;
+ALTER TABLE devotion_guides ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bible_study_resources ENABLE ROW LEVEL SECURITY;
 
 -- Allow all operations for authenticated users (simplify for offline-first)
 -- You can tighten these policies later based on user roles
@@ -282,6 +337,9 @@ CREATE POLICY "authenticated_all_ministry_fin" ON ministry_finance FOR ALL TO au
 CREATE POLICY "authenticated_all_contributions" ON contributions FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "authenticated_all_budgets" ON budgets FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "authenticated_all_finance_approvals" ON finance_approvals FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "authenticated_all_library_books" ON library_books FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "authenticated_all_devotion_guides" ON devotion_guides FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "authenticated_all_bible_study" ON bible_study_resources FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- Churches: allow authenticated users to read all, insert/update if authenticated
 ALTER TABLE churches ENABLE ROW LEVEL SECURITY;

@@ -65,6 +65,16 @@ import '../screens/ministry/ministry_dashboard_screen.dart';
 import '../screens/ministry/ministry_finance_screen.dart';
 import '../screens/ministry/ministry_reports_screen.dart';
 import '../screens/ministry/ministry_announcements_screen.dart';
+import '../screens/library/library_home_screen.dart';
+import '../screens/library/books/library_books_screen.dart';
+import '../screens/library/books/add_edit_library_book_screen.dart';
+import '../screens/library/books/library_book_detail_screen.dart';
+import '../screens/library/devotion/devotion_screen.dart';
+import '../screens/library/devotion/add_edit_devotion_screen.dart';
+import '../screens/library/devotion/devotion_detail_screen.dart';
+import '../screens/library/bible_study/bible_study_screen.dart';
+import '../screens/library/bible_study/add_edit_bible_study_screen.dart';
+import '../screens/library/bible_study/bible_study_detail_screen.dart';
 import '../models/ministry.dart';
 
 class _RouterNotifier extends ChangeNotifier {
@@ -344,6 +354,73 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile',
         builder: (_, _) => const DashboardThemeWrapper(child: ProfileScreen()),
+      ),
+      // ── Library (available to every authenticated user) ──────────────────
+      GoRoute(
+        path: '/library',
+        builder: (_, _) => const DashboardThemeWrapper(child: LibraryHomeScreen()),
+        routes: [
+          GoRoute(
+            path: 'books',
+            builder: (_, _) => const DashboardThemeWrapper(child: LibraryBooksScreen()),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (_, _) => const DashboardThemeWrapper(child: AddEditLibraryBookScreen()),
+              ),
+              GoRoute(
+                path: 'edit/:id',
+                builder: (_, state) => DashboardThemeWrapper(
+                    child: AddEditLibraryBookScreen(bookId: state.pathParameters['id'])),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (_, state) => DashboardThemeWrapper(
+                    child: LibraryBookDetailScreen(bookId: state.pathParameters['id']!)),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: 'devotion',
+            builder: (_, _) => const DashboardThemeWrapper(child: DevotionScreen()),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (_, _) => const DashboardThemeWrapper(child: AddEditDevotionScreen()),
+              ),
+              GoRoute(
+                path: 'edit/:id',
+                builder: (_, state) => DashboardThemeWrapper(
+                    child: AddEditDevotionScreen(devotionId: state.pathParameters['id'])),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (_, state) => DashboardThemeWrapper(
+                    child: DevotionDetailScreen(devotionId: state.pathParameters['id']!)),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: 'bible-study',
+            builder: (_, _) => const DashboardThemeWrapper(child: BibleStudyScreen()),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (_, _) => const DashboardThemeWrapper(child: AddEditBibleStudyScreen()),
+              ),
+              GoRoute(
+                path: 'edit/:id',
+                builder: (_, state) => DashboardThemeWrapper(
+                    child: AddEditBibleStudyScreen(studyId: state.pathParameters['id'])),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (_, state) => DashboardThemeWrapper(
+                    child: BibleStudyDetailScreen(studyId: state.pathParameters['id']!)),
+              ),
+            ],
+          ),
+        ],
       ),
       // Hierarchical routes
       GoRoute(

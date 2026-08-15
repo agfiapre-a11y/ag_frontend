@@ -24,6 +24,9 @@ import '../models/contribution.dart';
 import '../models/budget.dart';
 import '../models/finance_approval.dart';
 import '../models/app_notification.dart';
+import '../models/library_book.dart';
+import '../models/devotion_guide.dart';
+import '../models/bible_study_resource.dart';
 import '../models/sync_queue_entry.dart';
 import '../core/constants.dart';
 import 'tenant_context.dart';
@@ -535,6 +538,171 @@ class LocalDb {
       all = all.where((r) => r.ministryType == ministryType).toList();
     }
     all.sort((a, b) => b.date.compareTo(a.date));
+    return all;
+  }
+
+  // ── Library: Digital Books ───────────────────────────────────────────────
+
+  static Future<void> saveLibraryBook(LibraryBook book) async {
+    final books = getAllLibraryBooksMap();
+    books[book.id] = book.toMap();
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.libraryBooks), jsonEncode(books));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.libraryBooks,
+      recordId: book.id,
+      operation: SyncQueueEntry.opUpsert,
+      data: book.toMap(),
+    );
+  }
+
+  static Future<void> deleteLibraryBook(String id) async {
+    final books = getAllLibraryBooksMap();
+    books.remove(id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.libraryBooks), jsonEncode(books));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.libraryBooks,
+      recordId: id,
+      operation: SyncQueueEntry.opDelete,
+      data: {},
+    );
+  }
+
+  static Future<void> clearAllLibraryBooks() async {
+    await prefs.remove(TenantContext.tenantKey(HiveBoxes.libraryBooks));
+  }
+
+  static LibraryBook? getLibraryBookById(String id) {
+    final books = getAllLibraryBooksMap();
+    final data = books[id];
+    if (data == null) return null;
+    return LibraryBook.fromMap(data as Map);
+  }
+
+  static Map<String, dynamic> getAllLibraryBooksMap() {
+    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.libraryBooks));
+    if (data == null) return {};
+    return Map<String, dynamic>.from(jsonDecode(data));
+  }
+
+  static List<LibraryBook> getAllLibraryBooks({String? churchId}) {
+    final booksMap = getAllLibraryBooksMap();
+    var all = booksMap.values.map((v) => LibraryBook.fromMap(v as Map)).toList();
+    if (churchId != null) {
+      all = all.where((b) => b.churchId == churchId).toList();
+    }
+    all.sort((a, b) => a.title.compareTo(b.title));
+    return all;
+  }
+
+  // ── Library: Daily Devotion & Prayer Guide ───────────────────────────────
+
+  static Future<void> saveDevotionGuide(DevotionGuide devotion) async {
+    final devotions = getAllDevotionGuidesMap();
+    devotions[devotion.id] = devotion.toMap();
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.devotionGuides), jsonEncode(devotions));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.devotionGuides,
+      recordId: devotion.id,
+      operation: SyncQueueEntry.opUpsert,
+      data: devotion.toMap(),
+    );
+  }
+
+  static Future<void> deleteDevotionGuide(String id) async {
+    final devotions = getAllDevotionGuidesMap();
+    devotions.remove(id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.devotionGuides), jsonEncode(devotions));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.devotionGuides,
+      recordId: id,
+      operation: SyncQueueEntry.opDelete,
+      data: {},
+    );
+  }
+
+  static Future<void> clearAllDevotionGuides() async {
+    await prefs.remove(TenantContext.tenantKey(HiveBoxes.devotionGuides));
+  }
+
+  static DevotionGuide? getDevotionGuideById(String id) {
+    final devotions = getAllDevotionGuidesMap();
+    final data = devotions[id];
+    if (data == null) return null;
+    return DevotionGuide.fromMap(data as Map);
+  }
+
+  static Map<String, dynamic> getAllDevotionGuidesMap() {
+    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.devotionGuides));
+    if (data == null) return {};
+    return Map<String, dynamic>.from(jsonDecode(data));
+  }
+
+  static List<DevotionGuide> getAllDevotionGuides({String? churchId}) {
+    final map = getAllDevotionGuidesMap();
+    var all = map.values.map((v) => DevotionGuide.fromMap(v as Map)).toList();
+    if (churchId != null) {
+      all = all.where((d) => d.churchId == churchId).toList();
+    }
+    all.sort((a, b) => b.date.compareTo(a.date));
+    return all;
+  }
+
+  // ── Library: Bible Study Resources ───────────────────────────────────────
+
+  static Future<void> saveBibleStudyResource(BibleStudyResource study) async {
+    final studies = getAllBibleStudyResourcesMap();
+    studies[study.id] = study.toMap();
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.bibleStudyResources), jsonEncode(studies));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.bibleStudyResources,
+      recordId: study.id,
+      operation: SyncQueueEntry.opUpsert,
+      data: study.toMap(),
+    );
+  }
+
+  static Future<void> deleteBibleStudyResource(String id) async {
+    final studies = getAllBibleStudyResourcesMap();
+    studies.remove(id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.bibleStudyResources), jsonEncode(studies));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.bibleStudyResources,
+      recordId: id,
+      operation: SyncQueueEntry.opDelete,
+      data: {},
+    );
+  }
+
+  static Future<void> clearAllBibleStudyResources() async {
+    await prefs.remove(TenantContext.tenantKey(HiveBoxes.bibleStudyResources));
+  }
+
+  static BibleStudyResource? getBibleStudyResourceById(String id) {
+    final studies = getAllBibleStudyResourcesMap();
+    final data = studies[id];
+    if (data == null) return null;
+    return BibleStudyResource.fromMap(data as Map);
+  }
+
+  static Map<String, dynamic> getAllBibleStudyResourcesMap() {
+    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.bibleStudyResources));
+    if (data == null) return {};
+    return Map<String, dynamic>.from(jsonDecode(data));
+  }
+
+  static List<BibleStudyResource> getAllBibleStudyResources({String? churchId}) {
+    final map = getAllBibleStudyResourcesMap();
+    var all = map.values.map((v) => BibleStudyResource.fromMap(v as Map)).toList();
+    if (churchId != null) {
+      all = all.where((s) => s.churchId == churchId).toList();
+    }
+    all.sort((a, b) => a.title.compareTo(b.title));
     return all;
   }
 
@@ -1628,6 +1796,24 @@ class LocalDb {
     final map = _getAllAcrossChurches(HiveBoxes.sermons);
     return map.values.map((v) => Sermon.fromMap(v as Map)).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  static List<LibraryBook> getAllLibraryBooksAcrossChurches() {
+    final map = _getAllAcrossChurches(HiveBoxes.libraryBooks);
+    return map.values.map((v) => LibraryBook.fromMap(v as Map)).toList()
+      ..sort((a, b) => a.title.compareTo(b.title));
+  }
+
+  static List<DevotionGuide> getAllDevotionGuidesAcrossChurches() {
+    final map = _getAllAcrossChurches(HiveBoxes.devotionGuides);
+    return map.values.map((v) => DevotionGuide.fromMap(v as Map)).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  static List<BibleStudyResource> getAllBibleStudyResourcesAcrossChurches() {
+    final map = _getAllAcrossChurches(HiveBoxes.bibleStudyResources);
+    return map.values.map((v) => BibleStudyResource.fromMap(v as Map)).toList()
+      ..sort((a, b) => a.title.compareTo(b.title));
   }
 
   static List<ChurchEvent> getAllEventsAcrossChurches() {

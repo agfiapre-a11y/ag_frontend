@@ -283,6 +283,24 @@ class AppRoles {
     ministryHead,
   };
 
+  /// Roles that can add/edit/delete Library content (digital books, daily
+  /// devotion & prayer guides, Bible study resources). Viewing the Library
+  /// is open to every authenticated user regardless of role.
+  static const libraryManagerRoles = {
+    superSystemAdmin,
+    nationalAdmin,
+    regionalAdmin,
+    districtAdmin,
+    areaAdmin,
+    localChurchAdmin,
+    seniorPastor,
+    associatePastor,
+    districtPastor,
+    regionalBishop,
+    ministryHead,
+    churchSecretary,
+  };
+
   /// Roles that can add/edit/delete events.
   static const eventManagerRoles = {
     superSystemAdmin,
@@ -405,6 +423,11 @@ class HiveBoxes {
   static const benefitRequests = 'benefit_requests_box';
   static const budgets = 'budgets_box';
   static const financeApprovals = 'finance_approvals_box';
+
+  // Library
+  static const libraryBooks = 'library_books_box';
+  static const devotionGuides = 'devotion_guides_box';
+  static const bibleStudyResources = 'bible_study_resources_box';
 }
 
 class HiveKeys {
