@@ -257,6 +257,10 @@ class AppRoles {
     associatePastor,
     churchSecretary,
     ministryHead,
+    youthMinistryHead,
+    menFellowshipHead,
+    womenFellowshipHead,
+    childrenMinistryHead,
     cellLeader,
   };
 

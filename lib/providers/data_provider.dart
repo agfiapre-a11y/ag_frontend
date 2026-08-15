@@ -447,8 +447,7 @@ class AttendanceNotifier extends StateNotifier<List<AttendanceRecord>> {
       final queryPath = branchFilter != null
           ? '/tenants/$tenantId/attendance?branchId=$branchFilter'
           : '/tenants/$tenantId/attendance';
-      final resp = await api.get(queryPath);
-      final list = resp as List;
+      final list = await api.getList(queryPath);
       state = list
           .map((e) => AttendanceRecord.fromBackend(e as Map<dynamic, dynamic>))
           .toList();
