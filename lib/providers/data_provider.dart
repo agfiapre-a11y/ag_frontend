@@ -140,14 +140,7 @@ final departmentProvider =
   final appState = ref.watch(appStateProvider);
   final churchId = appState.church?.id ?? '';
   final user = appState.user;
-  String? branchFilter;
-  if (user?.role == AppRoles.seniorPastor && (user?.branchId.isNotEmpty ?? false)) {
-    branchFilter = user?.branchId;
-  } else if (user?.role == AppRoles.ministryHead &&
-      (user?.branchId.isNotEmpty ?? false)) {
-    branchFilter = user?.branchId;
-  }
-  return DepartmentNotifier(churchId, branchFilter,
+  return DepartmentNotifier(churchId, null,
       crossChurch: _isCrossChurchRole(user?.role));
 });
 
@@ -264,7 +257,6 @@ final memberProvider =
   final churchId = appState.church?.id ?? '';
   final user = appState.user;
 
-  String? branchFilter;
   String? deptFilter;
   String? organizationId, regionId, districtId, areaId;
 
@@ -295,13 +287,11 @@ final memberProvider =
     regionId = user?.regionId;
     districtId = user?.districtId;
     areaId = user?.areaId;
-    branchFilter = user?.branchId;
     deptFilter = user?.departmentId;
   }
 
   return MemberNotifier(
     churchId,
-    branchFilter: branchFilter,
     departmentFilter: deptFilter,
     organizationId: organizationId,
     regionId: regionId,
@@ -488,23 +478,6 @@ final attendanceProvider =
   final appState = ref.watch(appStateProvider);
   final churchId = appState.church?.id ?? '';
   final user = appState.user;
-  // Local church level users see only their branch
-  final branchFilter =
-      (user?.role == AppRoles.localChurchAdmin ||
-              user?.role == AppRoles.seniorPastor ||
-              user?.role == AppRoles.associatePastor ||
-              user?.role == AppRoles.churchSecretary ||
-              user?.role == AppRoles.financeOfficer ||
-              user?.role == AppRoles.ministryHead ||
-              user?.role == AppRoles.youthMinistryHead ||
-              user?.role == AppRoles.menFellowshipHead ||
-              user?.role == AppRoles.womenFellowshipHead ||
-              user?.role == AppRoles.childrenMinistryHead ||
-              user?.role == AppRoles.cellLeader ||
-              user?.role == AppRoles.volunteer ||
-              user?.role == AppRoles.member) && (user?.branchId.isNotEmpty ?? false)
-          ? user?.branchId
-          : null;
 
   // Ministry-specific heads see only their ministry attendance
   String? ministryTypeFilter;
@@ -518,7 +491,7 @@ final attendanceProvider =
     ministryTypeFilter = MinistryType.children;
   }
 
-  return AttendanceNotifier(churchId, branchFilter,
+  return AttendanceNotifier(churchId, null,
       crossChurch: _isCrossChurchRole(user?.role),
       ministryTypeFilter: ministryTypeFilter,
       tenantId: user?.churchId.isNotEmpty == true ? user!.churchId : null);
@@ -567,20 +540,7 @@ final financeProvider =
   final appState = ref.watch(appStateProvider);
   final churchId = appState.church?.id ?? '';
   final user = appState.user;
-  // Local church level users see only their branch
-  final branchFilter =
-      (user?.role == AppRoles.localChurchAdmin ||
-              user?.role == AppRoles.seniorPastor ||
-              user?.role == AppRoles.associatePastor ||
-              user?.role == AppRoles.churchSecretary ||
-              user?.role == AppRoles.financeOfficer ||
-              user?.role == AppRoles.ministryHead ||
-              user?.role == AppRoles.cellLeader ||
-              user?.role == AppRoles.volunteer ||
-              user?.role == AppRoles.member) && (user?.branchId.isNotEmpty ?? false)
-          ? user?.branchId
-          : null;
-  return FinanceNotifier(churchId, branchFilter,
+  return FinanceNotifier(churchId, null,
       crossChurch: _isCrossChurchRole(user?.role));
 });
 
@@ -622,20 +582,7 @@ final sermonProvider =
   final appState = ref.watch(appStateProvider);
   final churchId = appState.church?.id ?? '';
   final user = appState.user;
-  // Local church level users see only their branch
-  final branchFilter =
-      (user?.role == AppRoles.localChurchAdmin ||
-              user?.role == AppRoles.seniorPastor ||
-              user?.role == AppRoles.associatePastor ||
-              user?.role == AppRoles.churchSecretary ||
-              user?.role == AppRoles.financeOfficer ||
-              user?.role == AppRoles.ministryHead ||
-              user?.role == AppRoles.cellLeader ||
-              user?.role == AppRoles.volunteer ||
-              user?.role == AppRoles.member) && (user?.branchId.isNotEmpty ?? false)
-          ? user?.branchId
-          : null;
-  return SermonNotifier(churchId, branchFilter,
+  return SermonNotifier(churchId, null,
       crossChurch: _isCrossChurchRole(user?.role));
 });
 
@@ -684,26 +631,14 @@ final eventProvider =
   final churchId = appState.church?.id ?? '';
   final user = appState.user;
 
-  String? branchFilter;
   String? deptFilter;
   String? ministryTypeFilter;
 
-  // Local church level users see only their branch/department
-  if (user?.role == AppRoles.localChurchAdmin ||
-      user?.role == AppRoles.seniorPastor ||
-      user?.role == AppRoles.associatePastor ||
-      user?.role == AppRoles.churchSecretary ||
-      user?.role == AppRoles.financeOfficer ||
-      user?.role == AppRoles.youthMinistryHead ||
-      user?.role == AppRoles.menFellowshipHead ||
-      user?.role == AppRoles.womenFellowshipHead ||
-      user?.role == AppRoles.childrenMinistryHead) {
-    branchFilter = (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
-  } else if (user?.role == AppRoles.ministryHead ||
+  // Local church level users see only their department
+  if (user?.role == AppRoles.ministryHead ||
       user?.role == AppRoles.cellLeader ||
       user?.role == AppRoles.volunteer ||
       user?.role == AppRoles.member) {
-    branchFilter = (user?.branchId.isNotEmpty ?? false) ? user?.branchId : null;
     deptFilter = (user?.departmentId.isNotEmpty ?? false) ? user?.departmentId : null;
   }
 
@@ -718,7 +653,7 @@ final eventProvider =
     ministryTypeFilter = MinistryType.children;
   }
 
-  return EventNotifier(churchId, branchFilter, deptFilter,
+  return EventNotifier(churchId, null, deptFilter,
       crossChurch: _isCrossChurchRole(user?.role),
       ministryTypeFilter: ministryTypeFilter);
 });

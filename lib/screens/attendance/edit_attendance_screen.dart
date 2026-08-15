@@ -368,25 +368,25 @@ class _EditAttendanceScreenState
                   child: const Text('Clear'),
                 ),
               ]),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                onChanged: (v) => setState(() => _search = v),
-                decoration: InputDecoration(
-                  hintText: 'Search members…',
-                  prefixIcon: const Icon(Icons.search),
-                  isDense: true,
-                  suffixIcon: _search.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () => setState(() => _search = ''),
-                        )
-                      : null,
-                ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              onChanged: (v) => setState(() => _search = v),
+              decoration: InputDecoration(
+                hintText: 'Search members…',
+                prefixIcon: const Icon(Icons.search),
+                isDense: true,
+                suffixIcon: _search.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() => _search = ''),
+                      )
+                    : null,
               ),
             ),
-            const SizedBox(height: 4),
+          ),
+          const SizedBox(height: 4),
 
           Expanded(
             child: visibleMembers.isEmpty
