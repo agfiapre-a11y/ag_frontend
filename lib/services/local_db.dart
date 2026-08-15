@@ -27,6 +27,10 @@ import '../models/app_notification.dart';
 import '../models/library_book.dart';
 import '../models/devotion_guide.dart';
 import '../models/bible_study_resource.dart';
+import '../models/community_post.dart';
+import '../models/comment.dart';
+import '../models/conversation.dart';
+import '../models/message.dart';
 import '../models/sync_queue_entry.dart';
 import '../core/constants.dart';
 import 'tenant_context.dart';
@@ -704,6 +708,238 @@ class LocalDb {
     }
     all.sort((a, b) => a.title.compareTo(b.title));
     return all;
+  }
+
+  // ── Community: Posts ──────────────────────────────────────────────────────
+
+  static Future<void> saveCommunityPost(CommunityPost post) async {
+    final posts = getAllCommunityPostsMap();
+    posts[post.id] = post.toMap();
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.communityPosts), jsonEncode(posts));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.communityPosts,
+      recordId: post.id,
+      operation: SyncQueueEntry.opUpsert,
+      data: post.toMap(),
+    );
+  }
+
+  static Future<void> deleteCommunityPost(String id) async {
+    final posts = getAllCommunityPostsMap();
+    posts.remove(id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.communityPosts), jsonEncode(posts));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.communityPosts,
+      recordId: id,
+      operation: SyncQueueEntry.opDelete,
+      data: {},
+    );
+    // Cascade delete comments for this post
+    final comments = getAllCommentsMap();
+    comments.removeWhere((_, v) => Comment.fromMap(v as Map).postId == id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.communityComments), jsonEncode(comments));
+  }
+
+  static CommunityPost? getCommunityPostById(String id) {
+    final posts = getAllCommunityPostsMap();
+    final data = posts[id];
+    if (data == null) return null;
+    return CommunityPost.fromMap(data as Map);
+  }
+
+  static Map<String, dynamic> getAllCommunityPostsMap() {
+    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.communityPosts));
+    if (data == null) return {};
+    return Map<String, dynamic>.from(jsonDecode(data));
+  }
+
+  static List<CommunityPost> getAllCommunityPosts({String? churchId}) {
+    final map = getAllCommunityPostsMap();
+    var all = map.values.map((v) => CommunityPost.fromMap(v as Map)).toList();
+    if (churchId != null) {
+      all = all.where((p) => p.churchId == churchId).toList();
+    }
+    all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return all;
+  }
+
+  // ── Community: Comments ───────────────────────────────────────────────────
+
+  static Future<void> saveComment(Comment comment) async {
+    final comments = getAllCommentsMap();
+    comments[comment.id] = comment.toMap();
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.communityComments), jsonEncode(comments));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.communityComments,
+      recordId: comment.id,
+      operation: SyncQueueEntry.opUpsert,
+      data: comment.toMap(),
+    );
+  }
+
+  static Future<void> deleteComment(String id) async {
+    final comments = getAllCommentsMap();
+    comments.remove(id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.communityComments), jsonEncode(comments));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.communityComments,
+      recordId: id,
+      operation: SyncQueueEntry.opDelete,
+      data: {},
+    );
+  }
+
+  static Map<String, dynamic> getAllCommentsMap() {
+    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.communityComments));
+    if (data == null) return {};
+    return Map<String, dynamic>.from(jsonDecode(data));
+  }
+
+  static List<Comment> getCommentsForPost(String postId) {
+    final map = getAllCommentsMap();
+    final all = map.values.map((v) => Comment.fromMap(v as Map)).toList();
+    return all.where((c) => c.postId == postId).toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  }
+
+  static List<Comment> getAllComments({String? churchId}) {
+    final map = getAllCommentsMap();
+    var all = map.values.map((v) => Comment.fromMap(v as Map)).toList();
+    if (churchId != null) {
+      all = all.where((c) => c.churchId == churchId).toList();
+    }
+    all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return all;
+  }
+
+  // ── Community: Conversations ──────────────────────────────────────────────
+
+  static Future<void> saveConversation(Conversation convo) async {
+    final convos = getAllConversationsMap();
+    convos[convo.id] = convo.toMap();
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.communityConversations), jsonEncode(convos));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.communityConversations,
+      recordId: convo.id,
+      operation: SyncQueueEntry.opUpsert,
+      data: convo.toMap(),
+    );
+  }
+
+  static Future<void> deleteConversation(String id) async {
+    final convos = getAllConversationsMap();
+    convos.remove(id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.communityConversations), jsonEncode(convos));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.communityConversations,
+      recordId: id,
+      operation: SyncQueueEntry.opDelete,
+      data: {},
+    );
+    // Cascade delete messages for this conversation
+    final messages = getAllMessagesMap();
+    messages.removeWhere((_, v) => Message.fromMap(v as Map).conversationId == id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.communityMessages), jsonEncode(messages));
+  }
+
+  static Conversation? getConversationById(String id) {
+    final convos = getAllConversationsMap();
+    final data = convos[id];
+    if (data == null) return null;
+    return Conversation.fromMap(data as Map);
+  }
+
+  static Map<String, dynamic> getAllConversationsMap() {
+    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.communityConversations));
+    if (data == null) return {};
+    return Map<String, dynamic>.from(jsonDecode(data));
+  }
+
+  static List<Conversation> getConversationsForUser({required String churchId, required String userId}) {
+    final map = getAllConversationsMap();
+    final all = map.values.map((v) => Conversation.fromMap(v as Map)).toList();
+    return all
+        .where((c) => c.churchId == churchId && c.participantIds.contains(userId))
+        .toList()
+      ..sort((a, b) {
+        final aTime = a.lastMessageAt ?? a.createdAt;
+        final bTime = b.lastMessageAt ?? b.createdAt;
+        return bTime.compareTo(aTime);
+      });
+  }
+
+  // ── Community: Messages ───────────────────────────────────────────────────
+
+  static Future<void> saveMessage(Message message) async {
+    final messages = getAllMessagesMap();
+    messages[message.id] = message.toMap();
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.communityMessages), jsonEncode(messages));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.communityMessages,
+      recordId: message.id,
+      operation: SyncQueueEntry.opUpsert,
+      data: message.toMap(),
+    );
+  }
+
+  static Future<void> deleteMessage(String id) async {
+    final messages = getAllMessagesMap();
+    messages.remove(id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.communityMessages), jsonEncode(messages));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.communityMessages,
+      recordId: id,
+      operation: SyncQueueEntry.opDelete,
+      data: {},
+    );
+  }
+
+  static Map<String, dynamic> getAllMessagesMap() {
+    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.communityMessages));
+    if (data == null) return {};
+    return Map<String, dynamic>.from(jsonDecode(data));
+  }
+
+  static List<Message> getMessagesForConversation(String conversationId) {
+    final map = getAllMessagesMap();
+    final all = map.values.map((v) => Message.fromMap(v as Map)).toList();
+    return all.where((m) => m.conversationId == conversationId).toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  }
+
+  static Future<void> markConversationRead({required String conversationId, required String userId}) async {
+    final messages = getAllMessagesMap();
+    var changed = false;
+    for (final entry in messages.entries) {
+      final msg = Message.fromMap(entry.value as Map);
+      if (msg.conversationId == conversationId && msg.senderId != userId && !msg.isRead) {
+        messages[entry.key] = msg.copyWith(isRead: true).toMap();
+        changed = true;
+      }
+    }
+    if (changed) {
+      await prefs.setString(
+          TenantContext.tenantKey(HiveBoxes.communityMessages), jsonEncode(messages));
+    }
+  }
+
+  /// Count of unread messages for a user across all conversations.
+  static int getUnreadMessageCount({required String churchId, required String userId}) {
+    final map = getAllMessagesMap();
+    return map.values
+        .map((v) => Message.fromMap(v as Map))
+        .where((m) => m.churchId == churchId && m.senderId != userId && !m.isRead)
+        .length;
   }
 
   // ── Finance ───────────────────────────────────────────────────────────────
@@ -1814,6 +2050,20 @@ class LocalDb {
     final map = _getAllAcrossChurches(HiveBoxes.bibleStudyResources);
     return map.values.map((v) => BibleStudyResource.fromMap(v as Map)).toList()
       ..sort((a, b) => a.title.compareTo(b.title));
+  }
+
+  // ── Community: Cross-church queries (for above-church roles) ──────────────
+
+  static List<CommunityPost> getAllCommunityPostsAcrossChurches() {
+    final map = _getAllAcrossChurches(HiveBoxes.communityPosts);
+    return map.values.map((v) => CommunityPost.fromMap(v as Map)).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  static List<Comment> getAllCommentsAcrossChurches() {
+    final map = _getAllAcrossChurches(HiveBoxes.communityComments);
+    return map.values.map((v) => Comment.fromMap(v as Map)).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   static List<ChurchEvent> getAllEventsAcrossChurches() {

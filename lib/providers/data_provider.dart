@@ -24,6 +24,10 @@ import '../models/app_notification.dart';
 import '../models/library_book.dart';
 import '../models/devotion_guide.dart';
 import '../models/bible_study_resource.dart';
+import '../models/community_post.dart';
+import '../models/comment.dart';
+import '../models/conversation.dart';
+import '../models/message.dart';
 import '../core/constants.dart';
 import '../services/local_db.dart';
 import '../services/movement_classifier.dart';
@@ -704,6 +708,264 @@ final bibleStudyResourceProvider = StateNotifierProvider<
   final user = appState.user;
   return BibleStudyResourceNotifier(churchId,
       crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Community: Feed Posts ────────────────────────────────────────────────────
+
+class CommunityPostNotifier extends StateNotifier<List<CommunityPost>> {
+  final String churchId;
+  final bool crossChurch;
+
+  CommunityPostNotifier(this.churchId, {this.crossChurch = false})
+      : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllCommunityPostsAcrossChurches()
+        : LocalDb.getAllCommunityPosts(churchId: churchId);
+  }
+
+  Future<CommunityPost> createPost({
+    required String authorId,
+    required String authorName,
+    required String authorRole,
+    required String text,
+    String mediaUrl = '',
+    String mediaType = CommunityMediaType.text,
+  }) async {
+    final post = CommunityPost(
+      id: _uuid.v4(),
+      churchId: churchId,
+      authorId: authorId,
+      authorName: authorName,
+      authorRole: authorRole,
+      text: text,
+      mediaUrl: mediaUrl,
+      mediaType: mediaType,
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveCommunityPost(post);
+    _load();
+    return post;
+  }
+
+  Future<void> toggleLike(CommunityPost post, String userId) async {
+    final likes = List<String>.from(post.likes);
+    if (likes.contains(userId)) {
+      likes.remove(userId);
+    } else {
+      likes.add(userId);
+    }
+    await LocalDb.saveCommunityPost(post.copyWith(
+      likes: likes,
+      updatedAt: DateTime.now(),
+    ));
+    _load();
+  }
+
+  Future<void> deletePost(String id) async {
+    await LocalDb.deleteCommunityPost(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final communityPostProvider =
+    StateNotifierProvider<CommunityPostNotifier, List<CommunityPost>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  return CommunityPostNotifier(churchId,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Community: Comments ──────────────────────────────────────────────────────
+
+class CommentNotifier extends StateNotifier<List<Comment>> {
+  final String churchId;
+
+  CommentNotifier(this.churchId) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = LocalDb.getAllComments(churchId: churchId);
+  }
+
+  List<Comment> commentsForPost(String postId) =>
+      state.where((c) => c.postId == postId).toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+  Future<Comment> addComment({
+    required String postId,
+    required String authorId,
+    required String authorName,
+    required String authorRole,
+    required String text,
+  }) async {
+    final comment = Comment(
+      id: _uuid.v4(),
+      churchId: churchId,
+      postId: postId,
+      authorId: authorId,
+      authorName: authorName,
+      authorRole: authorRole,
+      text: text,
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveComment(comment);
+    _load();
+    return comment;
+  }
+
+  Future<void> deleteComment(String id) async {
+    await LocalDb.deleteComment(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final commentProvider =
+    StateNotifierProvider<CommentNotifier, List<Comment>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  return CommentNotifier(appState.church?.id ?? '');
+});
+
+// ── Community: Conversations ─────────────────────────────────────────────────
+
+class ConversationNotifier extends StateNotifier<List<Conversation>> {
+  final String churchId;
+  final String userId;
+
+  ConversationNotifier(this.churchId, this.userId) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    if (churchId.isEmpty || userId.isEmpty) {
+      state = [];
+      return;
+    }
+    state = LocalDb.getConversationsForUser(churchId: churchId, userId: userId);
+  }
+
+  /// Opens (or creates) a 1:1 conversation with [otherUserId].
+  Future<Conversation> openDirectMessage({
+    required String otherUserId,
+    required String otherUserName,
+    required String currentUserName,
+  }) async {
+    final id = Conversation.oneOnOneId(userId, otherUserId);
+    final existing = LocalDb.getConversationById(id);
+    if (existing != null) {
+      // Backfill names if missing
+      final names = Map<String, String>.from(existing.participantNames);
+      names[userId] = currentUserName;
+      names[otherUserId] = otherUserName;
+      if (names.length != existing.participantNames.length) {
+        await LocalDb.saveConversation(existing.copyWith(participantNames: names));
+      }
+      _load();
+      return existing;
+    }
+    final convo = Conversation(
+      id: id,
+      churchId: churchId,
+      participantIds: [userId, otherUserId],
+      participantNames: {userId: currentUserName, otherUserId: otherUserName},
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveConversation(convo);
+    _load();
+    return convo;
+  }
+
+  Future<void> deleteConversation(String id) async {
+    await LocalDb.deleteConversation(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final conversationProvider =
+    StateNotifierProvider<ConversationNotifier, List<Conversation>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  return ConversationNotifier(
+      appState.church?.id ?? '', appState.user?.id ?? '');
+});
+
+// ── Community: Messages ──────────────────────────────────────────────────────
+
+class MessageNotifier extends StateNotifier<List<Message>> {
+  final String churchId;
+  final String? conversationId;
+
+  MessageNotifier(this.churchId, this.conversationId) : super([]) {
+    _load();
+  }
+
+  void _load() {
+    if (conversationId == null) {
+      state = [];
+      return;
+    }
+    state = LocalDb.getMessagesForConversation(conversationId!);
+  }
+
+  Future<Message> sendMessage({
+    required String senderId,
+    required String senderName,
+    required String text,
+  }) async {
+    final message = Message(
+      id: _uuid.v4(),
+      churchId: churchId,
+      conversationId: conversationId!,
+      senderId: senderId,
+      senderName: senderName,
+      text: text,
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveMessage(message);
+    // Update the conversation's last message preview
+    final convo = LocalDb.getConversationById(conversationId!);
+    if (convo != null) {
+      await LocalDb.saveConversation(convo.copyWith(
+        lastMessageText: text,
+        lastMessageAt: message.createdAt,
+      ));
+    }
+    _load();
+    return message;
+  }
+
+  Future<void> markRead(String currentUserId) async {
+    if (conversationId == null) return;
+    await LocalDb.markConversationRead(
+        conversationId: conversationId!, userId: currentUserId);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final messageProvider =
+    StateNotifierProvider<MessageNotifier, List<Message>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  return MessageNotifier(appState.church?.id ?? '', null);
+});
+
+/// Family provider for messages scoped to a specific conversation.
+final messageForConversationProvider =
+    StateNotifierProvider.family<MessageNotifier, List<Message>, String>(
+        (ref, conversationId) {
+  final appState = ref.watch(appStateProvider);
+  return MessageNotifier(appState.church?.id ?? '', conversationId);
 });
 
 // ── Events ────────────────────────────────────────────────────────────────────

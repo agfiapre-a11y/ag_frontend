@@ -71,6 +71,12 @@ class AppDrawer extends ConsumerWidget {
                     label: 'Library',
                     route: '/library'),
 
+                // Community — social networking for every authenticated user
+                _EmeraldNavItem(
+                    icon: Icons.groups_outlined,
+                    label: 'Community',
+                    route: '/community'),
+
                 const SizedBox(height: 16),
 
                 // ── Super System Administrator ───────────────────────────

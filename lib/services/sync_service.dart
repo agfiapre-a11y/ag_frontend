@@ -39,6 +39,10 @@ class SyncService {
     HiveBoxes.libraryBooks: 'library_books',
     HiveBoxes.devotionGuides: 'devotion_guides',
     HiveBoxes.bibleStudyResources: 'bible_study_resources',
+    HiveBoxes.communityPosts: 'community_posts',
+    HiveBoxes.communityComments: 'community_comments',
+    HiveBoxes.communityConversations: 'community_conversations',
+    HiveBoxes.communityMessages: 'community_messages',
   };
 
   // ── Queue Management ──────────────────────────────────────────────────────

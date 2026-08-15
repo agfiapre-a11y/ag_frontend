@@ -75,6 +75,12 @@ import '../screens/library/devotion/devotion_detail_screen.dart';
 import '../screens/library/bible_study/bible_study_screen.dart';
 import '../screens/library/bible_study/add_edit_bible_study_screen.dart';
 import '../screens/library/bible_study/bible_study_detail_screen.dart';
+import '../screens/community/community_home_screen.dart';
+import '../screens/community/feed/community_feed_screen.dart';
+import '../screens/community/feed/new_post_screen.dart';
+import '../screens/community/feed/post_detail_screen.dart';
+import '../screens/community/messages/messages_screen.dart';
+import '../screens/community/messages/chat_thread_screen.dart';
 import '../models/ministry.dart';
 
 class _RouterNotifier extends ChangeNotifier {
@@ -417,6 +423,39 @@ final routerProvider = Provider<GoRouter>((ref) {
                 path: ':id',
                 builder: (_, state) => DashboardThemeWrapper(
                     child: BibleStudyDetailScreen(studyId: state.pathParameters['id']!)),
+              ),
+            ],
+          ),
+        ],
+      ),
+      // ── Community (social networking, available to every authenticated user) ─
+      GoRoute(
+        path: '/community',
+        builder: (_, _) => const DashboardThemeWrapper(child: CommunityHomeScreen()),
+        routes: [
+          GoRoute(
+            path: 'feed',
+            builder: (_, _) => const DashboardThemeWrapper(child: CommunityFeedScreen()),
+            routes: [
+              GoRoute(
+                path: 'new',
+                builder: (_, _) => const DashboardThemeWrapper(child: NewPostScreen()),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (_, state) => DashboardThemeWrapper(
+                    child: PostDetailScreen(postId: state.pathParameters['id']!)),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: 'messages',
+            builder: (_, _) => const DashboardThemeWrapper(child: MessagesScreen()),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (_, state) => DashboardThemeWrapper(
+                    child: ChatThreadScreen(conversationId: state.pathParameters['id']!)),
               ),
             ],
           ),

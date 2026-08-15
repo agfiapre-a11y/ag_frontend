@@ -301,6 +301,23 @@ class AppRoles {
     churchSecretary,
   };
 
+  /// Roles that can moderate the Community (remove any post/comment).
+  /// Every authenticated user can post, comment, like, and chat — these
+  /// roles can additionally delete content from other users.
+  static const communityModeratorRoles = {
+    superSystemAdmin,
+    nationalAdmin,
+    regionalAdmin,
+    districtAdmin,
+    areaAdmin,
+    localChurchAdmin,
+    seniorPastor,
+    associatePastor,
+    districtPastor,
+    regionalBishop,
+    churchSecretary,
+  };
+
   /// Roles that can add/edit/delete events.
   static const eventManagerRoles = {
     superSystemAdmin,
@@ -428,6 +445,12 @@ class HiveBoxes {
   static const libraryBooks = 'library_books_box';
   static const devotionGuides = 'devotion_guides_box';
   static const bibleStudyResources = 'bible_study_resources_box';
+
+  // Community (social networking)
+  static const communityPosts = 'community_posts_box';
+  static const communityComments = 'community_comments_box';
+  static const communityConversations = 'community_conversations_box';
+  static const communityMessages = 'community_messages_box';
 }
 
 class HiveKeys {
