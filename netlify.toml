@@ -10,6 +10,12 @@
 [build.environment]
   FlutterVersion = "stable"
 
+# Environment variables (used by --dart-define in build command)
+[context.production.environment]
+  API_BASE_URL = "https://ag-fipre.onrender.com/api"
+  SUPABASE_URL = "https://dbmbkevspcozcnhcsyii.supabase.co"
+  SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRibWJrZXZzcGNvemNuaGNzeWlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3ODczNTUsImV4cCI6MjA5OTM2MzM1NX0.7W2hZ0QIBYdpZ4tYh_wl7M3SpP9NzD7QWO90QHk5FDo"
+
 # SPA fallback so client-side routes work
 [[redirects]]
   from = "/*"
