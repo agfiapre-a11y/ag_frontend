@@ -15,12 +15,17 @@ import '../core/constants.dart';
 ///
 /// The app remains fully functional offline. This service runs in the
 /// background when connectivity is available.
+///
+/// Column names are converted between the app's camelCase convention and
+/// the database's snake_case convention automatically. The special field
+/// `churchId` (app) maps to `tenant_id` (database) to bridge the Flutter
+/// app's local model with the NestJS backend's TypeORM schema.
 class SyncService {
   static const _uuid = Uuid();
 
   /// Maps local HiveBoxes keys to Supabase table names.
   static const _tableMap = {
-    HiveBoxes.church: 'churches',
+    HiveBoxes.church: 'tenants',
     HiveBoxes.users: 'users',
     HiveBoxes.branches: 'branches',
     HiveBoxes.departments: 'departments',
@@ -44,6 +49,50 @@ class SyncService {
     HiveBoxes.communityConversations: 'community_conversations',
     HiveBoxes.communityMessages: 'community_messages',
   };
+
+  /// Special field mappings (app field name → database column name).
+  /// Handles the churchId ↔ tenant_id bridge and any other non-standard
+  /// column names that don't follow simple camelCase→snake_case conversion.
+  static const _fieldMap = {
+    'churchId': 'tenant_id',
+    'passwordHash': 'password_hash',
+  };
+
+  /// Converts a camelCase string to snake_case.
+  static String _toSnakeCase(String key) {
+    // Check special field mappings first
+    if (_fieldMap.containsKey(key)) return _fieldMap[key]!;
+    // camelCase → snake_case: insert _ before each uppercase, lowercase all
+    final result = key.replaceAllMapped(
+      RegExp(r'[A-Z]'),
+      (m) => '_${m[0]!.toLowerCase()}',
+    );
+    return result;
+  }
+
+  /// Converts a snake_case string to camelCase.
+  static String _toCamelCase(String key) {
+    // Reverse special field mappings
+    for (final entry in _fieldMap.entries) {
+      if (entry.value == key) return entry.key;
+    }
+    // snake_case → camelCase: remove _ and capitalize next letter
+    final result = key.replaceAllMapped(
+      RegExp(r'_([a-z])'),
+      (m) => m[1]!.toUpperCase(),
+    );
+    return result;
+  }
+
+  /// Converts all keys in a map from camelCase to snake_case for database.
+  static Map<String, dynamic> _keysToDb(Map<String, dynamic> map) {
+    return map.map((k, v) => MapEntry(_toSnakeCase(k), v));
+  }
+
+  /// Converts all keys in a map from snake_case to camelCase for local storage.
+  static Map<String, dynamic> _keysFromDb(Map<String, dynamic> map) {
+    return map.map((k, v) => MapEntry(_toCamelCase(k), v));
+  }
 
   // ── Queue Management ──────────────────────────────────────────────────────
 
@@ -105,7 +154,9 @@ class SyncService {
           // before pushing to cloud (UK GDPR Art. 5(1)(f))
           final syncData = Map<String, dynamic>.from(entry.data);
           syncData.remove('passwordHash');
-          await client.from(tableName).upsert(syncData, onConflict: 'id');
+          // Convert camelCase keys to snake_case for the database
+          final dbData = _keysToDb(syncData);
+          await client.from(tableName).upsert(dbData, onConflict: 'id');
         }
 
         await LocalDb.removeFromSyncQueue(entry.id);
@@ -146,11 +197,14 @@ class SyncService {
         var query = client.from(tableName).select().gte('updated_at', since.toIso8601String());
 
         // Church-scoped tables (not global ones like organization, region, etc.)
+        // Use tenant_id (database column name) instead of church_id.
+        // The tenants table itself and global tables don't have tenant_id.
         if (boxKey != HiveBoxes.organization &&
             boxKey != HiveBoxes.region &&
             boxKey != HiveBoxes.district &&
-            boxKey != HiveBoxes.area) {
-          query = query.eq('church_id', churchId);
+            boxKey != HiveBoxes.area &&
+            boxKey != HiveBoxes.church) {
+          query = query.eq('tenant_id', churchId);
         }
 
         final result = await query;
@@ -164,9 +218,10 @@ class SyncService {
 
         for (final record in result as List) {
           final recordMap = record as Map<String, dynamic>;
-          final id = recordMap['id'] as String?;
+          final id = recordMap['id']?.toString();
           if (id != null) {
-            localMap[id] = recordMap;
+            // Convert snake_case keys back to camelCase for local storage
+            localMap[id] = _keysFromDb(recordMap);
             pulled++;
           }
         }
