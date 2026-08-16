@@ -267,6 +267,22 @@ class AuthService {
     String? districtId,
     String? areaId,
   }) async {
+    // One admin per church: block locally too (covers offline mode and any
+    // path that writes straight to local storage / syncs directly to
+    // Supabase without going through the backend's onboard-user endpoint,
+    // which also enforces this rule).
+    if (role == AppRoles.localChurchAdmin && churchId.isNotEmpty) {
+      final admins = LocalDb.getUsersByRole(AppRoles.localChurchAdmin)
+          .where((u) => u.churchId == churchId);
+      if (admins.isNotEmpty) {
+        final existingAdmin = admins.first;
+        throw Exception(
+          'This church already has an admin (${existingAdmin.name} — ${existingAdmin.email}). '
+          'Demote or remove the existing admin before assigning a new one.',
+        );
+      }
+    }
+
     // Register on backend when API is configured
     if (ApiConfig.isConfigured && churchId.isNotEmpty) {
       await RemoteAuthService.registerUser(
