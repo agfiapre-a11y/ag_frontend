@@ -8,6 +8,7 @@ import '../../../models/comment.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/data_provider.dart';
 import '../../../services/local_db.dart';
+import '../../../widgets/community_video_player.dart';
 import '../../../widgets/responsive_scaffold.dart';
 
 /// Detail view for a single post — shows the full post, likes, and comments.
@@ -154,27 +155,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                   ],
                   if (post.isVideo && post.mediaUrl.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    Container(
-                      height: 240,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.play_circle_outline,
-                                size: 56, color: AppColors.primary),
-                            const SizedBox(height: 6),
-                            Text('Video post',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    color: AppColors.emeraldTextSecondary)),
-                          ],
-                        ),
-                      ),
-                    ),
+                    CommunityVideoPlayer(url: post.mediaUrl),
                   ],
                   const SizedBox(height: 16),
                   // Like + comment count

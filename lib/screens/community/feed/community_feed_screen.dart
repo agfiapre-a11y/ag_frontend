@@ -7,6 +7,7 @@ import '../../../core/constants.dart';
 import '../../../models/community_post.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/data_provider.dart';
+import '../../../widgets/community_video_player.dart';
 import '../../../widgets/responsive_scaffold.dart';
 
 /// Public social feed — posts, photos, videos, and status updates from
@@ -177,27 +178,7 @@ class _PostCard extends ConsumerWidget {
               ],
               if (post.isVideo && post.mediaUrl.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.play_circle_outline,
-                            size: 48, color: AppColors.primary),
-                        const SizedBox(height: 4),
-                        Text('Video post',
-                            style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: AppColors.emeraldTextSecondary)),
-                      ],
-                    ),
-                  ),
-                ),
+                CommunityVideoPlayer(url: post.mediaUrl),
               ],
               const SizedBox(height: 12),
               // Actions row

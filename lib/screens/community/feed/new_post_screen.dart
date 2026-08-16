@@ -6,9 +6,12 @@ import '../../../core/constants.dart';
 import '../../../models/community_post.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/data_provider.dart';
+import '../../../services/community_media_service.dart';
 import '../../../widgets/responsive_scaffold.dart';
 
 /// Composer for creating a new social post (status, photo, or video).
+/// Photos and videos are picked from the device and uploaded to Supabase
+/// Storage — no manual URL entry required.
 class NewPostScreen extends ConsumerStatefulWidget {
   const NewPostScreen({super.key});
 
@@ -18,29 +21,71 @@ class NewPostScreen extends ConsumerStatefulWidget {
 
 class _NewPostScreenState extends ConsumerState<NewPostScreen> {
   final _textController = TextEditingController();
-  final _mediaController = TextEditingController();
   String _mediaType = CommunityMediaType.text;
+  String _mediaUrl = '';
   bool _posting = false;
+  bool _uploading = false;
 
   @override
   void dispose() {
     _textController.dispose();
-    _mediaController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    setState(() => _uploading = true);
+    try {
+      final url = await CommunityMediaService.pickAndUploadImage();
+      if (url != null) {
+        setState(() {
+          _mediaUrl = url;
+          _mediaType = CommunityMediaType.image;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    setState(() => _uploading = true);
+    try {
+      final url = await CommunityMediaService.pickAndUploadVideo();
+      if (url != null) {
+        setState(() {
+          _mediaUrl = url;
+          _mediaType = CommunityMediaType.video;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  void _clearMedia() {
+    setState(() {
+      _mediaUrl = '';
+      _mediaType = CommunityMediaType.text;
+    });
   }
 
   Future<void> _submit() async {
     final text = _textController.text.trim();
-    final mediaUrl = _mediaController.text.trim();
-    if (text.isEmpty && mediaUrl.isEmpty) {
+    if (text.isEmpty && _mediaUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add some text or a media URL first.')),
-      );
-      return;
-    }
-    if (_mediaType != CommunityMediaType.text && mediaUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please provide a media URL.')),
+        const SnackBar(content: Text('Add some text or a photo/video first.')),
       );
       return;
     }
@@ -53,12 +98,8 @@ class _NewPostScreenState extends ConsumerState<NewPostScreen> {
             authorName: user.name,
             authorRole: user.role,
             text: text,
-            mediaUrl: mediaUrl,
-            mediaType: _mediaType == CommunityMediaType.text && mediaUrl.isNotEmpty
-                ? (_isImageUrl(mediaUrl)
-                    ? CommunityMediaType.image
-                    : CommunityMediaType.video)
-                : _mediaType,
+            mediaUrl: _mediaUrl,
+            mediaType: _mediaType,
           );
       if (mounted) context.pop();
     } catch (e) {
@@ -72,15 +113,6 @@ class _NewPostScreenState extends ConsumerState<NewPostScreen> {
     }
   }
 
-  bool _isImageUrl(String url) {
-    final lower = url.toLowerCase();
-    return lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.png') ||
-        lower.endsWith('.gif') ||
-        lower.endsWith('.webp');
-  }
-
   @override
   Widget build(BuildContext context) {
     return ResponsiveScaffold(
@@ -88,7 +120,7 @@ class _NewPostScreenState extends ConsumerState<NewPostScreen> {
         title: const Text('New Post'),
         actions: [
           TextButton(
-            onPressed: _posting ? null : _submit,
+            onPressed: _posting || _uploading ? null : _submit,
             child: _posting
                 ? const SizedBox(
                     width: 18,
@@ -106,37 +138,27 @@ class _NewPostScreenState extends ConsumerState<NewPostScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Media type selector
-            Text('Post type',
-                style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.emeraldTextSecondary)),
-            const SizedBox(height: 8),
-            Wrap(spacing: 8, children: [
-              _ChoiceChip(
-                label: 'Status',
-                icon: Icons.text_snippet_outlined,
-                selected: _mediaType == CommunityMediaType.text,
-                onSelected: () =>
-                    setState(() => _mediaType = CommunityMediaType.text),
+            // Author preview
+            Row(children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                child: Text(
+                  ref.watch(appStateProvider).user!.name[0].toUpperCase(),
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold, color: AppColors.primary),
+                ),
               ),
-              _ChoiceChip(
-                label: 'Photo',
-                icon: Icons.image_outlined,
-                selected: _mediaType == CommunityMediaType.image,
-                onSelected: () =>
-                    setState(() => _mediaType = CommunityMediaType.image),
-              ),
-              _ChoiceChip(
-                label: 'Video',
-                icon: Icons.videocam_outlined,
-                selected: _mediaType == CommunityMediaType.video,
-                onSelected: () =>
-                    setState(() => _mediaType = CommunityMediaType.video),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  ref.watch(appStateProvider).user!.name,
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w700, fontSize: 15),
+                ),
               ),
             ]),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             // Text field
             TextField(
               controller: _textController,
@@ -148,22 +170,109 @@ class _NewPostScreenState extends ConsumerState<NewPostScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            if (_mediaType != CommunityMediaType.text) ...[
-              TextField(
-                controller: _mediaController,
-                decoration: InputDecoration(
-                  hintText: _mediaType == CommunityMediaType.image
-                      ? 'Image URL (https://…)'
-                      : 'Video URL (https://…)',
-                  prefixIcon: Icon(_mediaType == CommunityMediaType.image
-                      ? Icons.image_outlined
-                      : Icons.videocam_outlined),
+            // Media preview or picker buttons
+            if (_mediaUrl.isNotEmpty && _mediaType == CommunityMediaType.image) ...[
+              Stack(children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(_mediaUrl,
+                      height: 240,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                            height: 240,
+                            color: AppColors.emeraldCardBorder,
+                            child: const Center(
+                              child: Icon(Icons.broken_image_outlined,
+                                  size: 40, color: Colors.grey),
+                            ),
+                          )),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IconButton.filled(
+                    onPressed: _clearMedia,
+                    icon: const Icon(Icons.close, size: 18),
+                    style: IconButton.styleFrom(
+                        backgroundColor: Colors.black.withValues(alpha: 0.6)),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 8),
+            ] else if (_mediaUrl.isNotEmpty && _mediaType == CommunityMediaType.video) ...[
+              Container(
+                height: 120,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.emeraldCardBorder),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.video_library, color: AppColors.primary, size: 28),
+                    const SizedBox(width: 8),
+                    Text('Video attached',
+                        style: GoogleFonts.poppins(
+                            fontSize: 13, color: AppColors.primary)),
+                    const SizedBox(width: 12),
+                    TextButton(onPressed: _clearMedia, child: const Text('Remove')),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),
+            ] else if (_uploading) ...[
+              Container(
+                height: 120,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 8),
+                      Text('Uploading…'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ] else ...[
+              // Media picker buttons
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickImage,
+                    icon: const Icon(Icons.photo_outlined),
+                    label: const Text('Photo'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickVideo,
+                    icon: const Icon(Icons.videocam_outlined),
+                    label: const Text('Video'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 8),
               Text(
-                'Tip: paste a direct link to an image or video file. '
-                'Uploaded media hosting can be added later.',
+                'Pick a photo or video from your device to share.',
                 style: GoogleFonts.poppins(
                     fontSize: 11, color: AppColors.emeraldTextMuted),
               ),
@@ -171,41 +280,6 @@ class _NewPostScreenState extends ConsumerState<NewPostScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ChoiceChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  const _ChoiceChip({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return FilterChip(
-      label: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 16,
-            color: selected ? Colors.white : AppColors.emeraldTextSecondary),
-        const SizedBox(width: 6),
-        Text(label),
-      ]),
-      selected: selected,
-      onSelected: (_) => onSelected(),
-      selectedColor: AppColors.primary,
-      labelStyle: GoogleFonts.poppins(
-          color: selected ? Colors.white : AppColors.emeraldTextPrimary,
-          fontWeight: FontWeight.w500,
-          fontSize: 13),
-      backgroundColor: AppColors.cardWhite,
-      side: const BorderSide(color: AppColors.emeraldCardBorder),
     );
   }
 }
