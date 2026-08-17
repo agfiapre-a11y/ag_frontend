@@ -104,6 +104,8 @@ class SundaySchoolChapter {
   final String content;
   final DateTime sundayDate;
   final String discussionPostId; // linked community post for discussion
+  final String memoryVerseRef; // e.g., "Jude 1:3" (empty if not found)
+  final String memoryVerseText; // the verse text (empty if not found)
   final DateTime createdAt;
 
   const SundaySchoolChapter({
@@ -115,6 +117,8 @@ class SundaySchoolChapter {
     this.content = '',
     required this.sundayDate,
     this.discussionPostId = '',
+    this.memoryVerseRef = '',
+    this.memoryVerseText = '',
     required this.createdAt,
   });
 
@@ -127,6 +131,8 @@ class SundaySchoolChapter {
         'content': content,
         'sundayDate': sundayDate.toIso8601String(),
         'discussionPostId': discussionPostId,
+        'memoryVerseRef': memoryVerseRef,
+        'memoryVerseText': memoryVerseText,
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -140,6 +146,8 @@ class SundaySchoolChapter {
         content: (map['content'] as String?) ?? '',
         sundayDate: DateTime.parse(map['sundayDate'] as String),
         discussionPostId: (map['discussionPostId'] as String?) ?? '',
+        memoryVerseRef: (map['memoryVerseRef'] as String?) ?? '',
+        memoryVerseText: (map['memoryVerseText'] as String?) ?? '',
         createdAt: DateTime.parse(map['createdAt'] as String),
       );
 
@@ -147,6 +155,8 @@ class SundaySchoolChapter {
     String? title,
     String? content,
     String? discussionPostId,
+    String? memoryVerseRef,
+    String? memoryVerseText,
   }) =>
       SundaySchoolChapter(
         id: id,
@@ -157,6 +167,8 @@ class SundaySchoolChapter {
         content: content ?? this.content,
         sundayDate: sundayDate,
         discussionPostId: discussionPostId ?? this.discussionPostId,
+        memoryVerseRef: memoryVerseRef ?? this.memoryVerseRef,
+        memoryVerseText: memoryVerseText ?? this.memoryVerseText,
         createdAt: createdAt,
       );
 

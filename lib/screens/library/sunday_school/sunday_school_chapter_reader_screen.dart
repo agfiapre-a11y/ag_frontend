@@ -41,7 +41,16 @@ class _SundaySchoolChapterReaderScreenState
     _chapter = LocalDb.getSundaySchoolChapterById(widget.chapterId);
     _book = LocalDb.getSundaySchoolBookById(widget.bookId);
     if (_chapter != null) {
-      _memoryVerse = VerseExtractor.extractMemoryVerse(_chapter!.content);
+      // Use stored memory verse if available, otherwise extract from content
+      final ch = _chapter!;
+      if (ch.memoryVerseRef.isNotEmpty || ch.memoryVerseText.isNotEmpty) {
+        _memoryVerse = MemoryVerse(
+          reference: ch.memoryVerseRef,
+          text: ch.memoryVerseText,
+        );
+      } else {
+        _memoryVerse = VerseExtractor.extractMemoryVerse(ch.content);
+      }
     }
   }
 
@@ -69,7 +78,10 @@ class _SundaySchoolChapterReaderScreenState
     final fmt = DateFormat.yMMMd();
     final text =
         'Sunday School Discussion: "${book.title}" — Lesson ${chapter.chapterNumber}: ${chapter.title}\n'
-        'Scheduled for ${fmt.format(chapter.sundayDate)}. Share your thoughts and reflections!';
+        'Scheduled for ${fmt.format(chapter.sundayDate)}.'
+        '${chapter.memoryVerseRef.isNotEmpty ? '\nMemory Verse: ${chapter.memoryVerseRef}' : ''}'
+        '${chapter.memoryVerseText.isNotEmpty ? '\n"${chapter.memoryVerseText}"' : ''}'
+        '\nShare your thoughts and reflections!';
 
     final post = await ref.read(communityPostProvider.notifier).createPost(
           authorId: user.id,

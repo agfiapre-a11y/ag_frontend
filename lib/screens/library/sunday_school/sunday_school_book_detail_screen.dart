@@ -232,8 +232,11 @@ class _SundaySchoolBookDetailScreenState
     final user = appState.user!;
     final fmt = DateFormat.yMMMd();
     final text =
-        'Sunday School Discussion: "${book.title}" — Chapter ${chapter.chapterNumber}: ${chapter.title}\n'
-        'Scheduled for ${fmt.format(chapter.sundayDate)}. Share your thoughts and reflections!';
+        'Sunday School Discussion: "${book.title}" — Lesson ${chapter.chapterNumber}: ${chapter.title}\n'
+        'Scheduled for ${fmt.format(chapter.sundayDate)}.'
+        '${chapter.memoryVerseRef.isNotEmpty ? '\nMemory Verse: ${chapter.memoryVerseRef}' : ''}'
+        '${chapter.memoryVerseText.isNotEmpty ? '\n"${chapter.memoryVerseText}"' : ''}'
+        '\nShare your thoughts and reflections!';
 
     final post = await ref.read(communityPostProvider.notifier).createPost(
           authorId: user.id,

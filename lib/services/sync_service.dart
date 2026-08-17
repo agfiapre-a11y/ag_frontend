@@ -73,6 +73,8 @@ class SyncService {
     'chapterNumber': 'chapter_number',
     'sundayDate': 'sunday_date',
     'discussionPostId': 'discussion_post_id',
+    'memoryVerseRef': 'memory_verse_ref',
+    'memoryVerseText': 'memory_verse_text',
   };
 
   /// Converts a camelCase string to snake_case.

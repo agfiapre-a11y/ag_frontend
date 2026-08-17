@@ -191,6 +191,8 @@ class _AddEditSundaySchoolScreenState
             title: mc.title,
             content: mc.content,
             sundayDate: mc.sundayDate,
+            memoryVerseRef: mc.memoryVerseRef,
+            memoryVerseText: mc.memoryVerseText,
             createdAt: DateTime.now(),
           );
           await LocalDb.saveSundaySchoolChapter(chapter);
