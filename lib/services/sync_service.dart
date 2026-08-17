@@ -200,7 +200,7 @@ class SyncService {
   /// When the app uses local login (backend unreachable), the local church ID
   /// is a random UUID that doesn't match the Supabase tenant_id. This method
   /// looks up the tenant by church name and returns the correct ID.
-  static Future<String> _resolveTenantId(String churchId) async {
+  static Future<String> resolveTenantId(String churchId) async {
     if (!SupabaseConfig.isConfigured) return churchId;
     final client = SupabaseConfig.client;
     if (client == null) return churchId;
@@ -255,7 +255,7 @@ class SyncService {
     if (client == null) return 0;
 
     // Resolve the correct Supabase tenant_id (may differ from local church ID)
-    final tenantId = await _resolveTenantId(churchId);
+    final tenantId = await resolveTenantId(churchId);
 
     final lastSync = LocalDb.getLastSyncTime();
     final since = lastSync ?? DateTime(2000);

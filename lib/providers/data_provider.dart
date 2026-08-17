@@ -32,6 +32,8 @@ import '../models/message.dart';
 import '../core/constants.dart';
 import '../services/local_db.dart';
 import '../services/movement_classifier.dart';
+import '../services/supabase_config.dart';
+import '../services/sync_service.dart';
 import '../services/api_config.dart';
 import '../services/api_client.dart';
 import 'auth_provider.dart';
@@ -47,17 +49,80 @@ bool _isCrossChurchRole(String? role) => AppRoles.isAboveChurchLevel(role);
 class UserNotifier extends StateNotifier<List<AppUser>> {
   final String churchId;
   final bool crossChurch;
+  bool _isLoadingFromSupabase = false;
 
   UserNotifier(this.churchId, {this.crossChurch = false}) : super([]) {
     _load();
   }
 
   void _load() {
+    // 1. Show local data immediately
     final all = crossChurch
         ? LocalDb.getAllUsersAcrossChurches()
         : LocalDb.getAllUsers().where((u) => u.churchId == churchId).toList()
           ..sort((a, b) => a.name.compareTo(b.name));
     state = all;
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final client = SupabaseConfig.client;
+      if (client == null) return;
+
+      final tenantId = await SyncService.resolveTenantId(churchId);
+
+      final result = await client
+          .from('users')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('name')
+          .timeout(const Duration(seconds: 10));
+
+      if (result.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in result as List) {
+        final map = record as Map<String, dynamic>;
+        try {
+          final roles = (map['roles'] as List?)?.cast<String>() ?? [];
+          final activeRole = map['active_role'] as String? ?? map['role'] as String? ?? 'member';
+          final user = AppUser(
+            id: map['id'] as String,
+            name: map['name'] as String? ?? '',
+            email: map['email'] as String,
+            passwordHash: '', // Don't expose password hash
+            roles: roles.isNotEmpty ? roles : [activeRole],
+            activeRole: activeRole,
+            churchId: map['tenant_id'] as String? ?? tenantId,
+            branchId: '',
+            phone: map['phone'] as String? ?? '',
+            createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ?? DateTime.now(),
+          );
+          await LocalDb.saveUser(user);
+        } catch (_) {}
+      }
+
+      // Refresh state with the updated local data
+      if (mounted) {
+        final updated = crossChurch
+            ? LocalDb.getAllUsersAcrossChurches()
+            : LocalDb.getAllUsers().where((u) => u.churchId == churchId).toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+        state = updated;
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> update(AppUser user) async {
@@ -603,15 +668,86 @@ final sermonProvider =
 class LibraryBookNotifier extends StateNotifier<List<LibraryBook>> {
   final String churchId;
   final bool crossChurch;
+  bool _isLoadingFromSupabase = false;
 
   LibraryBookNotifier(this.churchId, {this.crossChurch = false}) : super([]) {
     _load();
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = crossChurch
         ? LocalDb.getAllLibraryBooksAcrossChurches()
         : LocalDb.getAllLibraryBooks(churchId: churchId);
+
+    // 2. Fetch from Supabase in the background for fresh data
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final client = SupabaseConfig.client;
+      if (client == null) return;
+
+      // Resolve the correct tenant_id (local church ID may differ)
+      final tenantId = await SyncService.resolveTenantId(churchId);
+
+      final result = await client
+          .from('library_books')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('title')
+          .timeout(const Duration(seconds: 10));
+
+      if (result.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      // Convert Supabase records to LibraryBook objects
+      final books = <LibraryBook>[];
+      for (final record in result as List) {
+        final map = record as Map<String, dynamic>;
+        try {
+          final book = LibraryBook(
+            id: map['id'] as String,
+            churchId: map['tenant_id'] as String? ?? tenantId,
+            title: map['title'] as String? ?? '',
+            author: map['author'] as String? ?? '',
+            category: map['category'] as String? ?? LibraryBookCategory.other,
+            description: map['description'] as String? ?? '',
+            url: map['download_url'] as String? ?? map['url'] as String? ?? '',
+            coverColor: map['cover_color'] as String? ?? '',
+            source: map['source'] as String? ?? '',
+            addedById: map['added_by_id'] as String? ?? '',
+            content: map['content'] as String? ?? '',
+            pageCount: map['page_count'] as int? ?? 0,
+            wordCount: map['word_count'] as int? ?? 0,
+            createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ?? DateTime.now(),
+          );
+          books.add(book);
+
+          // Save to local DB so it's available offline next time
+          await LocalDb.saveLibraryBook(book);
+        } catch (_) {
+          // Skip malformed records
+        }
+      }
+
+      if (books.isNotEmpty && mounted) {
+        // Update state with fresh data from Supabase
+        state = crossChurch
+            ? LocalDb.getAllLibraryBooksAcrossChurches()
+            : books;
+      }
+    } catch (_) {
+      // Network error or table doesn't exist — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> save(LibraryBook book) async {
