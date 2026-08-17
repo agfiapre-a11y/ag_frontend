@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart';
+import 'package:bcrypt/bcrypt.dart';
 
 class SecurityService {
   static const _uuid = Uuid();
@@ -16,6 +17,7 @@ class SecurityService {
   }
 
   static bool verifyPassword(String password, String storedHash) {
+    // PBKDF2 hashes (Flutter app's native format)
     if (storedHash.startsWith('pbkdf2:')) {
       final parts = storedHash.split(':');
       if (parts.length != 4) return false;
@@ -25,12 +27,32 @@ class SecurityService {
       final computed = _pbkdf2(password, salt, iterations);
       return _constantTimeEquals(stored, computed);
     }
+    // Bcrypt hashes (from NestJS backend / Supabase — $2a$, $2b$, $2y$ prefix)
+    if (storedHash.startsWith('\$2a\$') ||
+        storedHash.startsWith('\$2b\$') ||
+        storedHash.startsWith('\$2y\$')) {
+      try {
+        return BCrypt.checkpw(password, storedHash);
+      } catch (_) {
+        return false;
+      }
+    }
+    // Legacy SHA-256 hashes
     final legacy = sha256.convert(utf8.encode(password)).toString();
     return legacy == storedHash;
   }
 
   static bool isLegacyHash(String storedHash) =>
-      !storedHash.startsWith('pbkdf2:');
+      !storedHash.startsWith('pbkdf2:') &&
+      !storedHash.startsWith('\$2a\$') &&
+      !storedHash.startsWith('\$2b\$') &&
+      !storedHash.startsWith('\$2y\$');
+
+  /// Returns true if the hash is a bcrypt hash (from the backend/Supabase).
+  static bool isBcryptHash(String storedHash) =>
+      storedHash.startsWith('\$2a\$') ||
+      storedHash.startsWith('\$2b\$') ||
+      storedHash.startsWith('\$2y\$');
 
   static Uint8List _generateSalt() {
     final salt = Uint8List(_saltLength);

@@ -16,6 +16,7 @@ import 'api_config.dart';
 import 'api_client.dart';
 import 'remote_auth_service.dart';
 import 'auth_token_manager.dart';
+import 'supabase_config.dart';
 import '../core/role_dashboard_catalog.dart';
 
 class AuthService {
@@ -140,8 +141,10 @@ class AuthService {
         return (user: result.user, church: result.church, tenantConfig: result.tenantConfig);
       } on ApiException catch (e) {
         if (e.statusCode == 401) {
-          await RateLimiter.recordFailure(email);
-          return null;
+          // Backend rejected credentials. Fall back to local login
+          // (the user may exist locally with a different password hash,
+          // or may exist in Supabase but not in the backend's DB).
+          return _loginLocal(email, password);
         }
         rethrow;
       } on TimeoutException catch (_) {
@@ -165,10 +168,33 @@ class AuthService {
   static Future<({AppUser user, Church? church, TenantConfig? tenantConfig})?> _loginLocal(
       String email, String password) async {
     final result = await LocalDb.getUserByEmailAcrossChurches(email);
+
+    // If user not found locally, try fetching from Supabase
     if (result == null) {
+      final supabaseUser = await _trySupabaseLogin(email, password);
+      if (supabaseUser != null) {
+        // Save the user to local DB so future logins work locally
+        await LocalDb.saveUser(supabaseUser);
+
+        // Find or create the church for this user
+        final church = await _ensureChurchForUser(supabaseUser);
+
+        await RateLimiter.clearAttempts(email);
+        await LocalDb.setActiveChurch(church.id);
+        TenantContext.setActiveChurch(church.id);
+        await SessionManager.saveSession(supabaseUser.id);
+        await AuditService.log(
+          actorId: supabaseUser.id,
+          actorName: supabaseUser.name,
+          action: 'login',
+          resource: 'auth',
+        );
+        return (user: supabaseUser, church: church, tenantConfig: null);
+      }
       await RateLimiter.recordFailure(email);
       return null;
     }
+
     final user = result.user;
     if (!SecurityService.verifyPassword(password, user.passwordHash)) {
       await RateLimiter.recordFailure(email);
@@ -177,6 +203,8 @@ class AuthService {
 
     await RateLimiter.clearAttempts(email);
 
+    // Migrate legacy SHA-256 hashes to PBKDF2, but keep bcrypt hashes as-is
+    // (bcrypt is the backend's format and is perfectly secure).
     if (SecurityService.isLegacyHash(user.passwordHash)) {
       final migrated = user.copyWith(passwordHash: SecurityService.hashPassword(password));
       await LocalDb.saveUser(migrated);
@@ -211,6 +239,108 @@ class AuthService {
       resource: 'auth',
     );
     return (user: user, church: church, tenantConfig: null);
+  }
+
+  /// Attempts to fetch a user from Supabase by email and verify their password.
+  /// Returns the user if successful, null otherwise.
+  /// This handles the case where users exist in Supabase (with bcrypt hashes)
+  /// but not in the local DB.
+  static Future<AppUser?> _trySupabaseLogin(String email, String password) async {
+    if (!SupabaseConfig.isConfigured) return null;
+    final client = SupabaseConfig.client;
+    if (client == null) return null;
+
+    try {
+      final result = await client
+          .from('users')
+          .select()
+          .eq('email', email.toLowerCase().trim())
+          .limit(1)
+          .timeout(const Duration(seconds: 10));
+
+      if (result.isEmpty) return null;
+
+      final record = result.first as Map<String, dynamic>;
+      final passwordHash = record['password_hash'] as String? ?? '';
+      if (passwordHash.isEmpty) return null;
+
+      // Verify password against the hash (supports bcrypt, PBKDF2, SHA-256)
+      if (!SecurityService.verifyPassword(password, passwordHash)) {
+        return null;
+      }
+
+      // Build AppUser from the Supabase record
+      final roles = (record['roles'] as List?)?.cast<String>() ?? [];
+      final activeRole = record['active_role'] as String? ?? record['role'] as String? ?? 'member';
+      final churchId = record['tenant_id'] as String? ?? '';
+
+      return AppUser(
+        id: record['id'] as String,
+        name: record['name'] as String? ?? '',
+        email: record['email'] as String,
+        passwordHash: passwordHash,
+        roles: roles.isNotEmpty ? roles : [activeRole],
+        activeRole: activeRole,
+        churchId: churchId,
+        branchId: '',
+        phone: record['phone'] as String? ?? '',
+        createdAt: DateTime.tryParse(record['created_at'] as String? ?? '') ?? DateTime.now(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Ensures a local Church exists for a user fetched from Supabase.
+  /// If the user's tenant_id matches an existing local church, returns it.
+  /// Otherwise, fetches the tenant from Supabase and creates a local church.
+  static Future<Church> _ensureChurchForUser(AppUser user) async {
+    // Check if a church with this ID already exists locally
+    final existing = LocalDb.getChurchById(user.churchId);
+    if (existing != null) return existing;
+
+    // Fetch the tenant from Supabase
+    if (SupabaseConfig.isConfigured) {
+      final client = SupabaseConfig.client;
+      if (client != null) {
+        try {
+          final result = await client
+              .from('tenants')
+              .select()
+              .eq('id', user.churchId)
+              .limit(1)
+              .timeout(const Duration(seconds: 10));
+
+          if (result.isNotEmpty) {
+            final t = result.first as Map<String, dynamic>;
+            final church = Church(
+              id: t['id'] as String,
+              name: t['name'] as String? ?? 'Church',
+              adminId: user.id,
+              address: t['address'] as String? ?? '',
+              phone: t['phone'] as String? ?? '',
+              email: t['email'] as String? ?? '',
+              createdAt: DateTime.tryParse(t['created_at'] as String? ?? '') ?? DateTime.now(),
+            );
+            await LocalDb.saveChurch(church);
+            return church;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Fallback: create a minimal church with the tenant_id
+    final church = Church(
+      id: user.churchId,
+      name: 'Paradise AG',
+      adminId: user.id,
+      address: '',
+      phone: '',
+      email: '',
+      createdAt: DateTime.now(),
+    );
+    await LocalDb.saveChurch(church);
+    return church;
   }
 
   static Future<void> _persistRemoteSession(

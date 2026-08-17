@@ -73,6 +73,7 @@ dependencies:
   flutter_web_plugins:
     sdk: flutter
   video_player: ^2.14.0
+  bcrypt: ^1.2.0
 
 dev_dependencies:
   flutter_test:
