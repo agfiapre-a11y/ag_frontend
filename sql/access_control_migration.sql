@@ -144,6 +144,15 @@ CREATE POLICY "users_insert_activities" ON access_activities
 
 -- ── 5. Updated updated_at trigger ───────────────────────────────────────────
 
+-- Create a reusable updated_at function (if not exists)
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Add updated_at trigger for access_grants (if not exists)
 DO $$
 BEGIN
@@ -152,7 +161,7 @@ BEGIN
   ) THEN
     CREATE TRIGGER trigger_access_grants_updated_at
       BEFORE UPDATE ON access_grants
-      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 
@@ -164,7 +173,7 @@ BEGIN
   ) THEN
     CREATE TRIGGER trigger_access_activities_updated_at
       BEFORE UPDATE ON access_activities
-      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 
