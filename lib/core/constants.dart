@@ -239,22 +239,29 @@ class AppRoles {
   };
 
   /// Roles that can record and edit attendance.
+  /// All roles EXCEPT member and guest — members cannot create attendance.
   static const attendanceManagerRoles = {
     superSystemAdmin,
     nationalAdmin,
+    nationalExecutive,
     regionalAdmin,
+    regionalBishop,
     districtAdmin,
+    districtPastor,
     areaAdmin,
     localChurchAdmin,
     seniorPastor,
     associatePastor,
     churchSecretary,
+    financeOfficer,
     ministryHead,
     youthMinistryHead,
     menFellowshipHead,
     womenFellowshipHead,
     childrenMinistryHead,
+    welfareHead,
     cellLeader,
+    volunteer,
   };
 
   /// Roles that can delete attendance records (narrower than who can record).
@@ -343,20 +350,29 @@ class AppRoles {
   };
 
   /// Roles that can add/edit/delete events.
+  /// All roles EXCEPT member and guest — members cannot create events.
   static const eventManagerRoles = {
     superSystemAdmin,
     nationalAdmin,
+    nationalExecutive,
     regionalAdmin,
+    regionalBishop,
     districtAdmin,
+    districtPastor,
     areaAdmin,
     localChurchAdmin,
     seniorPastor,
     associatePastor,
-    districtPastor,
-    regionalBishop,
     churchSecretary,
+    financeOfficer,
     ministryHead,
+    youthMinistryHead,
+    menFellowshipHead,
+    womenFellowshipHead,
+    childrenMinistryHead,
+    welfareHead,
     cellLeader,
+    volunteer,
   };
 
   /// Roles that can edit organization/church settings.
@@ -430,6 +446,166 @@ class AppRoles {
         return 'Guest';
       default:
         return role;
+    }
+  }
+}
+
+/// Target audience for events and attendance sessions.
+///
+/// Not every event requires the entire tenant's participation. When
+/// creating an event or attendance session, the creator selects the
+/// intended audience, and only users matching that audience will see it.
+class EventAudience {
+  /// Everyone in the tenant (all app users of the church).
+  static const everyone = 'everyone';
+
+  /// Members only (registered church members).
+  static const membersOnly = 'members_only';
+
+  /// Pastors and church leadership only.
+  static const pastorsOnly = 'pastors_only';
+
+  /// Leadership: admins, pastors, secretaries, ministry heads, cell leaders.
+  static const leadershipOnly = 'leadership_only';
+
+  /// Youth ministry (age 13–45).
+  static const youthMinistry = 'youth_ministry';
+
+  /// Men's fellowship (males above 45).
+  static const menFellowship = 'men_fellowship';
+
+  /// Women's fellowship (females above 45).
+  static const womenFellowship = 'women_fellowship';
+
+  /// Children's ministry (below 13).
+  static const childrenMinistry = 'children_ministry';
+
+  static const all = [
+    everyone,
+    membersOnly,
+    pastorsOnly,
+    leadershipOnly,
+    youthMinistry,
+    menFellowship,
+    womenFellowship,
+    childrenMinistry,
+  ];
+
+  static String label(String audience) {
+    switch (audience) {
+      case everyone:
+        return 'Everyone (All Users)';
+      case membersOnly:
+        return 'Members Only';
+      case pastorsOnly:
+        return 'Pastors Only';
+      case leadershipOnly:
+        return 'Leadership Only';
+      case youthMinistry:
+        return 'Youth Ministry';
+      case menFellowship:
+        return "Men's Fellowship";
+      case womenFellowship:
+        return "Women's Fellowship";
+      case childrenMinistry:
+        return "Children's Ministry";
+      default:
+        return audience;
+    }
+  }
+
+  /// Pastoral roles for the [pastorsOnly] audience.
+  static const _pastorRoles = {
+    AppRoles.seniorPastor,
+    AppRoles.associatePastor,
+    AppRoles.districtPastor,
+    AppRoles.regionalBishop,
+  };
+
+  /// Leadership roles for the [leadershipOnly] audience.
+  static const _leadershipRoles = {
+    AppRoles.localChurchAdmin,
+    AppRoles.seniorPastor,
+    AppRoles.associatePastor,
+    AppRoles.districtPastor,
+    AppRoles.regionalBishop,
+    AppRoles.churchSecretary,
+    AppRoles.financeOfficer,
+    AppRoles.ministryHead,
+    AppRoles.youthMinistryHead,
+    AppRoles.menFellowshipHead,
+    AppRoles.womenFellowshipHead,
+    AppRoles.childrenMinistryHead,
+    AppRoles.welfareHead,
+    AppRoles.cellLeader,
+  };
+
+  /// Ministry-head roles mapped to their ministry audience, so a
+  /// youth ministry head always sees youth ministry events, etc.
+  static const _ministryHeadAudience = {
+    AppRoles.youthMinistryHead: youthMinistry,
+    AppRoles.menFellowshipHead: menFellowship,
+    AppRoles.womenFellowshipHead: womenFellowship,
+    AppRoles.childrenMinistryHead: childrenMinistry,
+  };
+
+  /// Returns true if a user can see content targeted at [audience].
+  ///
+  /// [userRoles] — all roles of the user (multi-role support).
+  /// [userMinistryType] — the user's auto-assigned ministry type
+  ///   (MinistryType.youth / men_fellowship / women_fellowship / children),
+  ///   or null if unknown.
+  ///
+  /// Admins and above-church roles always see everything (oversight).
+  static bool canView(
+    String audience, {
+    required List<String> userRoles,
+    String? userMinistryType,
+  }) {
+    // Admins and above-church roles see everything
+    if (userRoles.any((r) =>
+        AppRoles.aboveChurchRoles.contains(r) ||
+        r == AppRoles.localChurchAdmin)) {
+      return true;
+    }
+
+    switch (audience) {
+      case everyone:
+        return true;
+      case membersOnly:
+        // Anyone except guests
+        return userRoles.any((r) => r != AppRoles.guest);
+      case pastorsOnly:
+        return userRoles.any(_pastorRoles.contains);
+      case leadershipOnly:
+        return userRoles.any(_leadershipRoles.contains);
+      case youthMinistry:
+      case menFellowship:
+      case womenFellowship:
+      case childrenMinistry:
+        // Ministry heads of that ministry always see their ministry's content
+        if (userRoles.any((r) => _ministryHeadAudience[r] == audience)) {
+          return true;
+        }
+        // Pastors and secretaries see all ministry content (oversight)
+        if (userRoles.any((r) =>
+            _pastorRoles.contains(r) || r == AppRoles.churchSecretary)) {
+          return true;
+        }
+        // Match user's ministry type to the audience
+        switch (audience) {
+          case youthMinistry:
+            return userMinistryType == 'youth';
+          case menFellowship:
+            return userMinistryType == 'men_fellowship';
+          case womenFellowship:
+            return userMinistryType == 'women_fellowship';
+          case childrenMinistry:
+            return userMinistryType == 'children';
+        }
+        return false;
+      default:
+        return true;
     }
   }
 }

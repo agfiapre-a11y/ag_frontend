@@ -47,6 +47,9 @@ class _TakeAttendanceScreenState
   // Expiry duration (hours)
   int _expiryHours = 2;
 
+  // Target audience
+  String _audience = EventAudience.everyone;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +57,8 @@ class _TakeAttendanceScreenState
       _selectedEvent = LocalDb.getEventById(widget.eventId!);
       if (_selectedEvent != null) {
         _date = _selectedEvent!.startDate;
+        // Inherit audience from the linked event
+        _audience = _selectedEvent!.audience;
         // Try to match event category to a service type
         final matchingType = ServiceTypes.all
             .where((s) => s.toLowerCase().contains(_selectedEvent!.category.toLowerCase()))
@@ -163,6 +168,7 @@ class _TakeAttendanceScreenState
         eventId: _selectedEvent?.id,
         eventTitle: _selectedEvent?.title,
         expiresAt: now.add(Duration(hours: _expiryHours)),
+        audience: _audience,
       );
       final error = await ref.read(attendanceProvider.notifier).save(record);
       if (mounted) {
@@ -267,6 +273,7 @@ class _TakeAttendanceScreenState
                     _selectedEvent = v;
                     if (v != null) {
                       _date = v.startDate;
+                      _audience = v.audience;
                       final matchingType = ServiceTypes.all
                           .where((s) => s.toLowerCase().contains(v.category.toLowerCase()))
                           .firstOrNull;
@@ -342,6 +349,25 @@ class _TakeAttendanceScreenState
                       style: GoogleFonts.poppins(fontSize: 14),
                     ),
                   ),
+                ),
+
+                // Audience selection
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _audience,
+                  decoration: const InputDecoration(
+                    labelText: 'Target Audience',
+                    prefixIcon: Icon(Icons.groups_outlined),
+                    isDense: true,
+                    helperText: 'Who should see this attendance session?',
+                  ),
+                  items: EventAudience.all
+                      .map((a) => DropdownMenuItem(
+                            value: a,
+                            child: Text(EventAudience.label(a)),
+                          ))
+                      .toList(),
+                  onChanged: (v) => setState(() => _audience = v!),
                 ),
 
                 // Expiry duration

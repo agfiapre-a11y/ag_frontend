@@ -25,13 +25,31 @@ class ActiveAttendanceBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final records = ref.watch(attendanceProvider);
-    final user = ref.watch(appStateProvider).user!;
+    final appState = ref.watch(appStateProvider);
+    final user = appState.user!;
 
-    // Filter to active, non-expired, today's sessions
+    // Compute user's ministry type for audience filtering
+    final members = ref.watch(memberProvider);
+    final memberRecord = members
+        .where((m) => m.email.toLowerCase() == user.email.toLowerCase())
+        .firstOrNull;
+    final userMinistryType = memberRecord != null
+        ? MinistryAssignment.getMinistryTypeForMember(memberRecord)
+        : null;
+
+    // Filter to active, non-expired, today's sessions that the user can view
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final activeSessions = records.where((r) {
       if (!r.canSelfCheckIn) return false;
+      // Audience filter
+      if (!EventAudience.canView(
+        r.audience,
+        userRoles: user.roles,
+        userMinistryType: userMinistryType,
+      )) {
+        return false;
+      }
       final rDate = DateTime(r.date.year, r.date.month, r.date.day);
       return rDate.isAtSameMomentAs(today);
     }).toList();

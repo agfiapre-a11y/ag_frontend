@@ -344,6 +344,12 @@ class _EventCard extends ConsumerWidget {
                     children: [
                       Row(children: [
                         _CategoryBadge(category: event.category, color: color),
+                        if (event.audience != EventAudience.everyone) ...[
+                          const SizedBox(width: 6),
+                          _CategoryBadge(
+                              category: EventAudience.label(event.audience),
+                              color: AppColors.accent),
+                        ],
                         if (isToday) ...[
                           const SizedBox(width: 6),
                           _CategoryBadge(

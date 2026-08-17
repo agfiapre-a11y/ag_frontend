@@ -77,13 +77,31 @@ class _SelfCheckInScreenState extends ConsumerState<SelfCheckInScreen> {
   @override
   Widget build(BuildContext context) {
     final attendanceRecords = ref.watch(attendanceProvider);
-    final user = ref.watch(appStateProvider).user!;
+    final appState = ref.watch(appStateProvider);
+    final user = appState.user!;
+    final members = ref.watch(memberProvider);
 
-    // Filter to active, non-expired sessions with GPS enabled, today's date
+    // Compute user's ministry type for audience filtering
+    final memberRecord = members
+        .where((m) => m.email.toLowerCase() == user.email.toLowerCase())
+        .firstOrNull;
+    final userMinistryType = memberRecord != null
+        ? MinistryAssignment.getMinistryTypeForMember(memberRecord)
+        : null;
+
+    // Filter to active, non-expired sessions with GPS enabled, today's date,
+    // and visible to this user based on audience targeting
     final today = DateTime.now();
     final activeSessions = attendanceRecords.where((r) {
       if (!r.canSelfCheckIn) return false;
       if (!r.hasGpsLocation) return false;
+      if (!EventAudience.canView(
+        r.audience,
+        userRoles: user.roles,
+        userMinistryType: userMinistryType,
+      )) {
+        return false;
+      }
       final rDate = DateTime(r.date.year, r.date.month, r.date.day);
       final tDate = DateTime(today.year, today.month, today.day);
       return rDate.isAtSameMomentAs(tDate);

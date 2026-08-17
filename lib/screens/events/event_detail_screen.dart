@@ -189,6 +189,19 @@ class EventDetailScreen extends ConsumerWidget {
                                   : AppColors.accent,
                             ),
                           ],
+                          // Target audience
+                          if (event.location.isNotEmpty ||
+                              event.organizer.isNotEmpty ||
+                              branchName != null ||
+                              isCrossChurch) ...[
+                            const Divider(height: 24),
+                          ],
+                          _InfoRow(
+                            icon: Icons.groups_outlined,
+                            label: 'Target Audience',
+                            value: EventAudience.label(event.audience),
+                            color: AppColors.accent,
+                          ),
                         ],
                       ),
                     ),

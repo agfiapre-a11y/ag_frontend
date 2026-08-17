@@ -384,6 +384,7 @@ class AttendanceNotifier extends StateNotifier<List<AttendanceRecord>> {
         'eventId': record.eventId,
         'eventTitle': record.eventTitle,
         'expiresAt': record.expiresAt?.toIso8601String(),
+        'audience': record.audience,
       });
       final saved = AttendanceRecord.fromBackend(resp);
 
@@ -1075,14 +1076,24 @@ class EventNotifier extends StateNotifier<List<ChurchEvent>> {
   final bool crossChurch;
   final String? ministryTypeFilter;
 
+  /// Audience filtering: user's roles + ministry type, used to filter
+  /// events by their `audience` field. Null = no audience filtering.
+  final List<String>? _userRoles;
+  final String? _userMinistryType;
+
   EventNotifier(this.churchId, this.branchFilter, this.departmentFilter,
-      {this.crossChurch = false, this.ministryTypeFilter})
-      : super([]) {
+      {this.crossChurch = false,
+      this.ministryTypeFilter,
+      List<String>? userRoles,
+      String? userMinistryType})
+      : _userRoles = userRoles,
+        _userMinistryType = userMinistryType,
+        super([]) {
     _load();
   }
 
   void _load() {
-    state = crossChurch
+    var events = crossChurch
         ? LocalDb.getAllEventsAcrossChurches()
         : LocalDb.getAllEvents(
             churchId: churchId,
@@ -1090,6 +1101,19 @@ class EventNotifier extends StateNotifier<List<ChurchEvent>> {
             departmentId: departmentFilter,
             ministryType: ministryTypeFilter,
           );
+
+    // Apply audience filtering if user roles are provided
+    if (_userRoles != null) {
+      events = events
+          .where((e) => EventAudience.canView(
+                e.audience,
+                userRoles: _userRoles!,
+                userMinistryType: _userMinistryType,
+              ))
+          .toList();
+    }
+
+    state = events;
   }
 
   Future<void> save(ChurchEvent event) async {
@@ -1133,9 +1157,23 @@ final eventProvider =
     ministryTypeFilter = MinistryType.children;
   }
 
+  // Compute user's ministry type for audience filtering
+  String? userMinistryType;
+  if (user != null) {
+    final members = LocalDb.getAllMembers(churchId: churchId);
+    final memberRecord = members
+        .where((m) => m.email.toLowerCase() == user.email.toLowerCase())
+        .firstOrNull;
+    if (memberRecord != null) {
+      userMinistryType = MinistryAssignment.getMinistryTypeForMember(memberRecord);
+    }
+  }
+
   return EventNotifier(churchId, null, deptFilter,
       crossChurch: _isCrossChurchRole(user?.role),
-      ministryTypeFilter: ministryTypeFilter);
+      ministryTypeFilter: ministryTypeFilter,
+      userRoles: user?.roles ?? [],
+      userMinistryType: userMinistryType);
 });
 
 // ── Organizations ─────────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
   late TextEditingController _organizerCtrl;
 
   String _category = EventCategory.sundayService;
+  String _audience = EventAudience.everyone;
   bool _isAllDay = false;
   late DateTime _startDate;
   late DateTime _startTime;
@@ -61,6 +62,7 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
         _locationCtrl.text = _existing!.location;
         _organizerCtrl.text = _existing!.organizer;
         _category = _existing!.category;
+        _audience = _existing!.audience;
         _isAllDay = _existing!.isAllDay;
         _startDate = _existing!.startDate;
         _startTime = _existing!.startDate;
@@ -169,6 +171,7 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
         title: _titleCtrl.text.trim(),
         description: _descCtrl.text.trim(),
         category: _category,
+        audience: _audience,
         location: _locationCtrl.text.trim(),
         organizer: _organizerCtrl.text.trim(),
         startDate: start,
@@ -269,6 +272,22 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
                   .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                   .toList(),
               onChanged: (v) => setState(() => _category = v!),
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: _audience,
+              decoration: const InputDecoration(
+                labelText: 'Target Audience *',
+                prefixIcon: Icon(Icons.groups_outlined),
+                helperText: 'Who should see this event?',
+              ),
+              items: EventAudience.all
+                  .map((a) => DropdownMenuItem(
+                        value: a,
+                        child: Text(EventAudience.label(a)),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _audience = v!),
             ),
             const SizedBox(height: 14),
             TextFormField(

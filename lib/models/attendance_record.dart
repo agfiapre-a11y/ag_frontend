@@ -24,6 +24,10 @@ class AttendanceRecord {
   /// no longer self-check-in. Defaults to 2 hours after creation.
   final DateTime? expiresAt;
 
+  /// Target audience for this attendance session (EventAudience constant).
+  /// Controls which users see the session on their dashboard.
+  final String audience;
+
   const AttendanceRecord({
     required this.id,
     required this.churchId,
@@ -41,6 +45,7 @@ class AttendanceRecord {
     this.eventId,
     this.eventTitle,
     this.expiresAt,
+    this.audience = 'everyone',
   });
 
   int get presentCount => presentMemberIds.length;
@@ -77,6 +82,7 @@ class AttendanceRecord {
         'eventId': eventId,
         'eventTitle': eventTitle,
         'expiresAt': expiresAt?.toIso8601String(),
+        'audience': audience,
       };
 
   factory AttendanceRecord.fromMap(Map<dynamic, dynamic> map) =>
@@ -99,6 +105,7 @@ class AttendanceRecord {
         expiresAt: map['expiresAt'] != null
             ? DateTime.parse(map['expiresAt'] as String)
             : null,
+        audience: (map['audience'] as String?) ?? 'everyone',
       );
 
   factory AttendanceRecord.fromBackend(Map<dynamic, dynamic> map) =>
@@ -122,6 +129,7 @@ class AttendanceRecord {
         expiresAt: map['expiresAt'] != null
             ? DateTime.parse(map['expiresAt'] as String)
             : null,
+        audience: (map['audience'] as String?) ?? 'everyone',
       );
 
   AttendanceRecord copyWith({
@@ -136,6 +144,7 @@ class AttendanceRecord {
     DateTime? expiresAt,
     String? serviceType,
     DateTime? date,
+    String? audience,
   }) =>
       AttendanceRecord(
         id: id,
@@ -154,6 +163,7 @@ class AttendanceRecord {
         eventId: eventId ?? this.eventId,
         eventTitle: eventTitle ?? this.eventTitle,
         expiresAt: expiresAt ?? this.expiresAt,
+        audience: audience ?? this.audience,
       );
 }
 
