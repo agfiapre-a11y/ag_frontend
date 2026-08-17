@@ -139,6 +139,11 @@ class AppDrawer extends ConsumerWidget {
                       icon: Icons.video_library_outlined,
                       label: 'Sermons',
                       route: '/sermons'),
+                  const SizedBox(height: 16),
+                  _EmeraldNavItem(
+                      icon: Icons.admin_panel_settings_outlined,
+                      label: 'Access Control',
+                      route: '/access-control'),
                 ],
 
                 // ── National Administrator ───────────────────────────────
@@ -388,6 +393,11 @@ class AppDrawer extends ConsumerWidget {
                       icon: Icons.video_library_outlined,
                       label: 'Sermons',
                       route: '/sermons'),
+                  const SizedBox(height: 16),
+                  _EmeraldNavItem(
+                      icon: Icons.admin_panel_settings_outlined,
+                      label: 'Access Control',
+                      route: '/access-control'),
                 ],
 
                 // ── Local Church Administrator ───────────────────────────────
@@ -435,6 +445,10 @@ class AppDrawer extends ConsumerWidget {
                       label: 'Sermons',
                       route: '/sermons'),
                   const SizedBox(height: 16),
+                  _EmeraldNavItem(
+                      icon: Icons.admin_panel_settings_outlined,
+                      label: 'Access Control',
+                      route: '/access-control'),
                   _EmeraldNavItem(
                       icon: Icons.settings_outlined,
                       label: 'Church Settings',

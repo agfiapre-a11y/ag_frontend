@@ -1602,6 +1602,7 @@ class _LocalChurchAdminHome extends ConsumerWidget {
       const _QuickAction(Icons.video_library, 'Sermons', '/sermons', module: 'sermons'),
       const _QuickAction(Icons.manage_accounts, 'Users', '/users'),
       const _QuickAction(Icons.church, 'Ministry', '/ministry'),
+      const _QuickAction(Icons.admin_panel_settings, 'Access Control', '/access-control'),
     ];
     final filteredActions = tenantConfig == null
         ? allActions
