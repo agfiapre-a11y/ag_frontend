@@ -99,7 +99,7 @@ CREATE POLICY "users_read_own_grants" ON access_grants
   FOR SELECT USING (
     user_id = auth.uid()::text
     OR tenant_id = (
-      SELECT tenant_id FROM users WHERE id = auth.uid()::text
+      SELECT tenant_id::text FROM users WHERE id = auth.uid()
     )
   );
 
@@ -108,7 +108,7 @@ CREATE POLICY "admins_manage_grants" ON access_grants
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM users
-      WHERE id = auth.uid()::text
+      WHERE id = auth.uid()
       AND (
         roles @> ARRAY['superSystemAdmin']::text[]
         OR roles @> ARRAY['localChurchAdmin']::text[]
@@ -129,7 +129,7 @@ CREATE POLICY "users_read_activities" ON access_activities
   FOR SELECT USING (
     user_id = auth.uid()::text
     OR tenant_id = (
-      SELECT tenant_id FROM users WHERE id = auth.uid()::text
+      SELECT tenant_id::text FROM users WHERE id = auth.uid()
     )
   );
 
@@ -138,7 +138,7 @@ CREATE POLICY "users_insert_activities" ON access_activities
   FOR INSERT WITH CHECK (
     user_id = auth.uid()::text
     OR tenant_id = (
-      SELECT tenant_id FROM users WHERE id = auth.uid()::text
+      SELECT tenant_id::text FROM users WHERE id = auth.uid()
     )
   );
 
