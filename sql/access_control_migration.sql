@@ -35,7 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_users_active_role ON users (active_role);
 
 CREATE TABLE IF NOT EXISTS access_grants (
   id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id text NOT NULL,
   user_id text NOT NULL,
   username text,
   display_name text,
@@ -58,7 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_access_grants_dashboard ON access_grants (dashboa
 
 CREATE TABLE IF NOT EXISTS access_activities (
   id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  tenant_id text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id text NOT NULL,
   user_id text NOT NULL,
   username text,
   display_name text,
