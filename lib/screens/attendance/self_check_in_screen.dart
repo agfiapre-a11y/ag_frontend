@@ -79,10 +79,10 @@ class _SelfCheckInScreenState extends ConsumerState<SelfCheckInScreen> {
     final attendanceRecords = ref.watch(attendanceProvider);
     final user = ref.watch(appStateProvider).user!;
 
-    // Filter to active sessions with GPS enabled, today's date
+    // Filter to active, non-expired sessions with GPS enabled, today's date
     final today = DateTime.now();
     final activeSessions = attendanceRecords.where((r) {
-      if (!r.isActive) return false;
+      if (!r.canSelfCheckIn) return false;
       if (!r.hasGpsLocation) return false;
       final rDate = DateTime(r.date.year, r.date.month, r.date.day);
       final tDate = DateTime(today.year, today.month, today.day);
@@ -302,6 +302,48 @@ class _SelfCheckInScreenState extends ConsumerState<SelfCheckInScreen> {
                                   ),
                                 ],
                               ),
+                              if (record.expiresAt != null) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Icon(Icons.timer_outlined,
+                                        size: 16,
+                                        color: record.isExpired
+                                            ? Colors.red
+                                            : Colors.orange),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      record.isExpired
+                                          ? 'Expired'
+                                          : 'Expires ${DateFormat('h:mm a').format(record.expiresAt!)}',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        color: record.isExpired
+                                            ? Colors.red
+                                            : Colors.orange,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (record.isLinkedToEvent &&
+                                  record.eventTitle != null) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.link, size: 14, color: Colors.blue),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        record.eventTitle!,
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 12, color: Colors.blue),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                               const SizedBox(height: 16),
                               SizedBox(
                                 width: double.infinity,

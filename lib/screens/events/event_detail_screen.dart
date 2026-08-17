@@ -17,10 +17,13 @@ class EventDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final event = LocalDb.getEventById(eventId);
-    final user = ref.watch(appStateProvider).user!;
+    final appState = ref.watch(appStateProvider);
+    final user = appState.user!;
     final branches = ref.watch(branchProvider);
     final branchName =
         branches.where((b) => b.id == event?.branchId).firstOrNull?.name;
+    final isCrossChurch = AppRoles.aboveChurchRoles.contains(user.activeRole);
+    final isOwnChurch = event?.churchId == appState.church?.id;
 
     if (event == null) {
       return Scaffold(
@@ -167,6 +170,25 @@ class EventDetailScreen extends ConsumerWidget {
                               color: color,
                             ),
                           ],
+                          // Tenant info for cross-church users
+                          if (isCrossChurch) ...[
+                            if (event.location.isNotEmpty ||
+                                event.organizer.isNotEmpty ||
+                                branchName != null)
+                              const Divider(height: 24),
+                            _InfoRow(
+                              icon: isOwnChurch
+                                  ? Icons.home_work_outlined
+                                  : Icons.church_outlined,
+                              label: 'Church',
+                              value: isOwnChurch
+                                  ? '${event.churchName ?? 'Your church'} (Your church)'
+                                  : event.churchName ?? 'Another church',
+                              color: isOwnChurch
+                                  ? AppColors.success
+                                  : AppColors.accent,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -200,6 +222,22 @@ class EventDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 24),
                   _RecordedBy(recordedById: event.recordedById,
                       createdAt: event.createdAt),
+
+                  // Take attendance button (for admins)
+                  if (canManage && event.isUpcoming || canManage && event.isToday) ...[
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => context.push('/attendance/take?eventId=${event.id}'),
+                        icon: const Icon(Icons.how_to_reg),
+                        label: const Text('Take Attendance'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -278,25 +316,25 @@ class EventDetailScreen extends ConsumerWidget {
   Color _categoryColor(String cat) {
     switch (cat) {
       case EventCategory.sundayService:
-        return AppColors.primary;
+        return const Color(0xFF3B82F6);
       case EventCategory.conference:
-        return Colors.deepPurple;
+        return const Color(0xFFA855F7);
       case EventCategory.outreach:
-        return Colors.teal;
+        return const Color(0xFF14B8A6);
       case EventCategory.prayerNight:
-        return Colors.indigo;
+        return const Color(0xFF6366F1);
       case EventCategory.youthEvent:
-        return Colors.orange;
+        return const Color(0xFFF97316);
       case EventCategory.womensMeeting:
-        return Colors.pink;
+        return const Color(0xFFEC4899);
       case EventCategory.mensMeeting:
-        return Colors.blue.shade700;
+        return const Color(0xFF0EA5E9);
       case EventCategory.specialService:
-        return Colors.amber.shade800;
+        return const Color(0xFFF59E0B);
       case EventCategory.communityEvent:
-        return Colors.green;
+        return const Color(0xFF22C55E);
       default:
-        return Colors.grey.shade600;
+        return const Color(0xFF64748B);
     }
   }
 }
@@ -312,9 +350,9 @@ class _CategoryPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
+        color: color.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.6), width: 1),
       ),
       child: Text(
         label,

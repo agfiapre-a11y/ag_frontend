@@ -2328,8 +2328,18 @@ class LocalDb {
 
   static List<ChurchEvent> getAllEventsAcrossChurches() {
     final map = _getAllAcrossChurches(HiveBoxes.events);
-    return map.values.map((v) => ChurchEvent.fromMap(v as Map)).toList()
-      ..sort((a, b) => b.startDate.compareTo(a.startDate));
+    final churches = getAllChurches();
+    final events = map.values.map((v) {
+      final event = ChurchEvent.fromMap(v as Map);
+      // Populate churchName for cross-church display
+      final church = churches.where((c) => c.id == event.churchId).firstOrNull;
+      if (church != null) {
+        return event.copyWith(churchName: church.name);
+      }
+      return event;
+    }).toList();
+    events.sort((a, b) => b.startDate.compareTo(a.startDate));
+    return events;
   }
 
   static List<Organization> getAllOrganizationsAcrossChurches() {

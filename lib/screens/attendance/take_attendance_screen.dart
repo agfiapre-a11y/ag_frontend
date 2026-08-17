@@ -6,13 +6,17 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants.dart';
 import '../../models/attendance_record.dart';
+import '../../models/event.dart';
 import '../../models/member.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/data_provider.dart';
 import '../../services/gps_service.dart';
+import '../../services/local_db.dart';
 
 class TakeAttendanceScreen extends ConsumerStatefulWidget {
-  const TakeAttendanceScreen({super.key});
+  final String? eventId;
+
+  const TakeAttendanceScreen({super.key, this.eventId});
 
   @override
   ConsumerState<TakeAttendanceScreen> createState() =>
@@ -35,9 +39,36 @@ class _TakeAttendanceScreenState
   bool _gpsLoading = false;
   bool _enableGps = false;
 
+  // Event linking
+  ChurchEvent? _selectedEvent;
+  bool _useCustomServiceType = false;
+  final _customServiceTypeCtrl = TextEditingController();
+
+  // Expiry duration (hours)
+  int _expiryHours = 2;
+
   @override
   void initState() {
     super.initState();
+    if (widget.eventId != null) {
+      _selectedEvent = LocalDb.getEventById(widget.eventId!);
+      if (_selectedEvent != null) {
+        _date = _selectedEvent!.startDate;
+        // Try to match event category to a service type
+        final matchingType = ServiceTypes.all
+            .where((s) => s.toLowerCase().contains(_selectedEvent!.category.toLowerCase()))
+            .firstOrNull;
+        if (matchingType != null) {
+          _serviceType = matchingType;
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _customServiceTypeCtrl.dispose();
+    super.dispose();
   }
 
   List<Member> _branchMembers(List<Member> all) {
@@ -105,20 +136,33 @@ class _TakeAttendanceScreenState
       return;
     }
 
+    final effectiveServiceType =
+        _useCustomServiceType ? _customServiceTypeCtrl.text.trim() : _serviceType;
+    if (effectiveServiceType.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Service type is required')),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
     try {
+      final now = DateTime.now();
       final record = AttendanceRecord(
         id: _uuid.v4(),
         churchId: appState.church?.id ?? "",
         branchId: '',
-        serviceType: _serviceType,
+        serviceType: effectiveServiceType,
         date: _date,
         presentMemberIds: _presentIds.toList(),
         recordedById: user.id,
-        createdAt: DateTime.now(),
+        createdAt: now,
         latitude: _enableGps ? _latitude : null,
         longitude: _enableGps ? _longitude : null,
         proximityRadius: _enableGps ? _proximityRadius : 100,
+        eventId: _selectedEvent?.id,
+        eventTitle: _selectedEvent?.title,
+        expiresAt: now.add(Duration(hours: _expiryHours)),
       );
       final error = await ref.read(attendanceProvider.notifier).save(record);
       if (mounted) {
@@ -155,11 +199,19 @@ class _TakeAttendanceScreenState
   @override
   Widget build(BuildContext context) {
     final allMembers = ref.watch(memberProvider);
+    final events = ref.watch(eventProvider);
 
     final branchMembers = _branchMembers(allMembers)
         .where((m) => m.isActive)
         .toList();
     final visibleMembers = _filtered(branchMembers);
+
+    // Upcoming + today events for linking
+    final now = DateTime.now();
+    final linkableEvents = events
+        .where((e) => e.endDate.isAfter(now.subtract(const Duration(days: 1))))
+        .toList()
+      ..sort((a, b) => a.startDate.compareTo(b.startDate));
 
     return Scaffold(
       appBar: AppBar(
@@ -185,12 +237,50 @@ class _TakeAttendanceScreenState
         children: [
           // Session info panel
           Container(
-            color: Colors.white,
+            color: AppColors.surface,
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
+                // Event linking
+                DropdownButtonFormField<ChurchEvent?>(
+                  initialValue: _selectedEvent,
+                  decoration: const InputDecoration(
+                    labelText: 'Link to Event (optional)',
+                    prefixIcon: Icon(Icons.event_outlined),
+                    isDense: true,
+                  ),
+                  items: [
+                    const DropdownMenuItem<ChurchEvent?>(
+                      value: null,
+                      child: Text('No event — standalone service'),
+                    ),
+                    ...linkableEvents.map((e) => DropdownMenuItem<ChurchEvent?>(
+                          value: e,
+                          child: Text(
+                            '${e.title} (${DateFormat('MMM d').format(e.startDate)})',
+                            style: GoogleFonts.poppins(fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _selectedEvent = v;
+                    if (v != null) {
+                      _date = v.startDate;
+                      final matchingType = ServiceTypes.all
+                          .where((s) => s.toLowerCase().contains(v.category.toLowerCase()))
+                          .firstOrNull;
+                      if (matchingType != null) {
+                        _serviceType = matchingType;
+                      }
+                    }
+                  }),
+                ),
+                const SizedBox(height: 12),
+
+                // Service type dropdown
                 DropdownButtonFormField<String>(
-                  initialValue: _serviceType,
+                  initialValue: _useCustomServiceType ? null : _serviceType,
                   decoration: const InputDecoration(
                     labelText: 'Service Type',
                     prefixIcon: Icon(Icons.church),
@@ -200,8 +290,36 @@ class _TakeAttendanceScreenState
                       .map((s) =>
                           DropdownMenuItem(value: s, child: Text(s)))
                       .toList(),
-                  onChanged: (v) => setState(() => _serviceType = v!),
+                  onChanged: _useCustomServiceType
+                      ? null
+                      : (v) => setState(() => _serviceType = v!),
                 ),
+                // Manual service type input toggle
+                Row(
+                  children: [
+                    Switch(
+                      value: _useCustomServiceType,
+                      onChanged: (v) => setState(() => _useCustomServiceType = v),
+                      activeThumbColor: AppColors.primary,
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Custom service type',
+                        style: GoogleFonts.poppins(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_useCustomServiceType)
+                  TextFormField(
+                    controller: _customServiceTypeCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Enter service type',
+                      prefixIcon: Icon(Icons.edit_outlined),
+                      isDense: true,
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                  ),
                 const SizedBox(height: 12),
                 InkWell(
                   onTap: () async {
@@ -225,6 +343,26 @@ class _TakeAttendanceScreenState
                     ),
                   ),
                 ),
+
+                // Expiry duration
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () => _showExpiryPicker(),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Self-check-in expires after',
+                      prefixIcon: Icon(Icons.timer_outlined),
+                      isDense: true,
+                    ),
+                    child: Text(
+                      _expiryHours == 0
+                          ? 'No expiry (manual close)'
+                          : '${_expiryHours} hour${_expiryHours > 1 ? 's' : ''}',
+                      style: GoogleFonts.poppins(fontSize: 14),
+                    ),
+                  ),
+                ),
+
                 // GPS Proximity Section
                 const SizedBox(height: 12),
                 SwitchListTile(
@@ -279,20 +417,20 @@ class _TakeAttendanceScreenState
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.green.shade50,
+                        color: Colors.green.shade50.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green.shade200),
+                        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
                           const Icon(Icons.location_on,
-                              color: Colors.green, size: 18),
+                              color: AppColors.success, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Lat: ${_latitude!.toStringAsFixed(6)}, Lng: ${_longitude!.toStringAsFixed(6)}',
                               style: GoogleFonts.poppins(
-                                  fontSize: 12, color: Colors.green.shade800),
+                                  fontSize: 12, color: AppColors.success),
                             ),
                           ),
                         ],
@@ -333,20 +471,46 @@ class _TakeAttendanceScreenState
               margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: AppColors.accent.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade200),
+                border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
                   const Icon(Icons.info_outline,
-                      color: Colors.blue, size: 18),
+                      color: AppColors.accent, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'GPS self-check-in enabled. You can also manually mark members below.',
                       style: GoogleFonts.poppins(
-                          fontSize: 12, color: Colors.blue.shade800),
+                          fontSize: 12, color: AppColors.accent),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          // Event-linked banner
+          if (_selectedEvent != null)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.link, color: AppColors.primaryLight, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Linked to: ${_selectedEvent!.title}',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: AppColors.primaryLight,
+                          fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],
@@ -361,7 +525,7 @@ class _TakeAttendanceScreenState
                   style: GoogleFonts.poppins(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
-                      color: AppColors.primary),
+                      color: AppColors.primaryLight),
                 ),
                 Text('Active members',
                     style: GoogleFonts.poppins(
@@ -469,6 +633,30 @@ class _TakeAttendanceScreenState
                       ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showExpiryPicker() {
+    final options = [0, 1, 2, 3, 4, 6, 8, 12, 24];
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Self-check-in expiry'),
+        children: options.map((h) {
+          return SimpleDialogOption(
+            onPressed: () {
+              setState(() => _expiryHours = h);
+              Navigator.pop(ctx);
+            },
+            child: Text(
+              h == 0
+                  ? 'No expiry (manual close only)'
+                  : '${h} hour${h > 1 ? 's' : ''}',
+              style: GoogleFonts.poppins(fontSize: 14),
+            ),
+          );
+        }).toList(),
       ),
     );
   }

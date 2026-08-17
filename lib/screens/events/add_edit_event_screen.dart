@@ -153,7 +153,11 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
       final user = appState.user!;
       final churchId = appState.church?.id ?? "";
 
-      final departmentId = user.role == AppRoles.ministryHead
+      // Events are limited to the user's tenant (church).
+      // Only above-church roles (super admin, national, regional, etc.)
+      // can create events for other tenants via cross-church access.
+      // For now, all events are created in the user's own church.
+      final departmentId = user.activeRole == AppRoles.ministryHead
           ? user.departmentId
           : (_existing?.departmentId ?? '');
 
@@ -216,6 +220,32 @@ class _AddEditEventScreenState extends ConsumerState<AddEditEventScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Tenant info banner
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.church, color: AppColors.primaryLight, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'This event will be created for: ${ref.read(appStateProvider).church?.name ?? 'Your church'}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: AppColors.primaryLight,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             _SectionHeader('Event Details'),
             const SizedBox(height: 12),
             TextFormField(

@@ -15,6 +15,10 @@ class ChurchEvent {
   final DateTime createdAt;
   final String? ministryType;
 
+  /// Denormalized church/tenant name for cross-church display.
+  /// Set when loading events across churches (for above-church roles).
+  final String? churchName;
+
   const ChurchEvent({
     required this.id,
     required this.churchId,
@@ -31,6 +35,7 @@ class ChurchEvent {
     required this.recordedById,
     required this.createdAt,
     this.ministryType,
+    this.churchName,
   });
 
   bool get isUpcoming => endDate.isAfter(DateTime.now());
@@ -62,6 +67,7 @@ class ChurchEvent {
         'recordedById': recordedById,
         'createdAt': createdAt.toIso8601String(),
         'ministryType': ministryType,
+        'churchName': churchName,
       };
 
   factory ChurchEvent.fromMap(Map<dynamic, dynamic> map) => ChurchEvent(
@@ -80,6 +86,7 @@ class ChurchEvent {
         recordedById: map['recordedById'] as String,
         createdAt: DateTime.parse(map['createdAt'] as String),
         ministryType: map['ministryType'] as String?,
+        churchName: map['churchName'] as String?,
       );
 
   ChurchEvent copyWith({
@@ -94,6 +101,7 @@ class ChurchEvent {
     String? branchId,
     String? departmentId,
     String? ministryType,
+    String? churchName,
   }) =>
       ChurchEvent(
         id: id,
@@ -111,6 +119,7 @@ class ChurchEvent {
         recordedById: recordedById,
         createdAt: createdAt,
         ministryType: ministryType ?? this.ministryType,
+        churchName: churchName ?? this.churchName,
       );
 }
 

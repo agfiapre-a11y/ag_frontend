@@ -381,6 +381,9 @@ class AttendanceNotifier extends StateNotifier<List<AttendanceRecord>> {
         'latitude': record.latitude,
         'longitude': record.longitude,
         'proximityRadius': record.proximityRadius,
+        'eventId': record.eventId,
+        'eventTitle': record.eventTitle,
+        'expiresAt': record.expiresAt?.toIso8601String(),
       });
       final saved = AttendanceRecord.fromBackend(resp);
 

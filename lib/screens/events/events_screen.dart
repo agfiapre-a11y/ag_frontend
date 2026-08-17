@@ -276,8 +276,11 @@ class _EventCard extends ConsumerWidget {
     final branches = ref.watch(branchProvider);
     final branchName =
         branches.where((b) => b.id == event.branchId).firstOrNull?.name;
-    final user = ref.watch(appStateProvider).user!;
+    final appState = ref.watch(appStateProvider);
+    final user = appState.user!;
     final canManage = AppRoles.eventManagerRoles.contains(user.role);
+    final isCrossChurch = AppRoles.aboveChurchRoles.contains(user.activeRole);
+    final isOwnChurch = event.churchId == appState.church?.id;
 
     final color = _categoryColor(event.category);
     final isToday = event.isToday;
@@ -294,7 +297,7 @@ class _EventCard extends ConsumerWidget {
               Container(
                 width: 62,
                 decoration: BoxDecoration(
-                  color: isToday ? color : color.withValues(alpha: 0.1),
+                  color: isToday ? color : color.withValues(alpha: 0.3),
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(12),
                     bottomLeft: Radius.circular(12),
@@ -326,7 +329,7 @@ class _EventCard extends ConsumerWidget {
                         fontSize: 11,
                         color: isToday
                             ? Colors.white70
-                            : color.withValues(alpha: 0.7),
+                            : color.withValues(alpha: 0.8),
                       ),
                     ),
                   ],
@@ -423,6 +426,38 @@ class _EventCard extends ConsumerWidget {
                             icon: Icons.account_tree_outlined,
                             text: branchName),
                       ],
+                      // Tenant info for cross-church users
+                      if (isCrossChurch && event.churchName != null) ...[
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          Icon(
+                            isOwnChurch
+                                ? Icons.home_work_outlined
+                                : Icons.church_outlined,
+                            size: 13,
+                            color: isOwnChurch
+                                ? AppColors.success
+                                : AppColors.accent,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              isOwnChurch
+                                  ? 'Your church'
+                                  : event.churchName!,
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: isOwnChurch
+                                    ? AppColors.success
+                                    : AppColors.accent,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ]),
+                      ],
                     ],
                   ),
                 ),
@@ -459,25 +494,25 @@ class _EventCard extends ConsumerWidget {
   Color _categoryColor(String cat) {
     switch (cat) {
       case EventCategory.sundayService:
-        return AppColors.primary;
+        return const Color(0xFF3B82F6);   // Bright blue
       case EventCategory.conference:
-        return Colors.deepPurple;
+        return const Color(0xFFA855F7);   // Bright purple
       case EventCategory.outreach:
-        return Colors.teal;
+        return const Color(0xFF14B8A6);   // Bright teal
       case EventCategory.prayerNight:
-        return Colors.indigo;
+        return const Color(0xFF6366F1);   // Bright indigo
       case EventCategory.youthEvent:
-        return Colors.orange;
+        return const Color(0xFFF97316);   // Bright orange
       case EventCategory.womensMeeting:
-        return Colors.pink;
+        return const Color(0xFFEC4899);   // Bright pink
       case EventCategory.mensMeeting:
-        return Colors.blue.shade700;
+        return const Color(0xFF0EA5E9);   // Sky blue
       case EventCategory.specialService:
-        return Colors.amber.shade800;
+        return const Color(0xFFF59E0B);   // Amber
       case EventCategory.communityEvent:
-        return Colors.green;
+        return const Color(0xFF22C55E);   // Bright green
       default:
-        return Colors.grey.shade600;
+        return const Color(0xFF64748B);   // Slate gray
     }
   }
 }
@@ -493,8 +528,9 @@ class _CategoryBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.25),
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.4), width: 0.5),
       ),
       child: Text(
         category,
