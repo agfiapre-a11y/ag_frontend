@@ -56,6 +56,12 @@ class SyncService {
   static const _fieldMap = {
     'churchId': 'tenant_id',
     'passwordHash': 'password_hash',
+    // library_books: model uses 'url' but table column is 'download_url'
+    'url': 'download_url',
+    'coverColor': 'cover_color',
+    'addedById': 'added_by_id',
+    'pageCount': 'page_count',
+    'wordCount': 'word_count',
   };
 
   /// Converts a camelCase string to snake_case.

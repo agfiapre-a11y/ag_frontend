@@ -9,6 +9,9 @@ class LibraryBook {
   final String coverColor;
   final String source;
   final String addedById;
+  final String content;
+  final int pageCount;
+  final int wordCount;
   final DateTime createdAt;
 
   const LibraryBook({
@@ -22,6 +25,9 @@ class LibraryBook {
     this.coverColor = '',
     this.source = '',
     required this.addedById,
+    this.content = '',
+    this.pageCount = 0,
+    this.wordCount = 0,
     required this.createdAt,
   });
 
@@ -36,6 +42,9 @@ class LibraryBook {
         'coverColor': coverColor,
         'source': source,
         'addedById': addedById,
+        'content': content,
+        'pageCount': pageCount,
+        'wordCount': wordCount,
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -50,6 +59,9 @@ class LibraryBook {
         coverColor: (map['coverColor'] as String?) ?? '',
         source: (map['source'] as String?) ?? '',
         addedById: (map['addedById'] as String?) ?? '',
+        content: (map['content'] as String?) ?? '',
+        pageCount: (map['pageCount'] as int?) ?? 0,
+        wordCount: (map['wordCount'] as int?) ?? 0,
         createdAt: DateTime.parse(map['createdAt'] as String),
       );
 
@@ -61,6 +73,9 @@ class LibraryBook {
     String? url,
     String? coverColor,
     String? source,
+    String? content,
+    int? pageCount,
+    int? wordCount,
   }) =>
       LibraryBook(
         id: id,
@@ -73,6 +88,9 @@ class LibraryBook {
         coverColor: coverColor ?? this.coverColor,
         source: source ?? this.source,
         addedById: addedById,
+        content: content ?? this.content,
+        pageCount: pageCount ?? this.pageCount,
+        wordCount: wordCount ?? this.wordCount,
         createdAt: createdAt,
       );
 }

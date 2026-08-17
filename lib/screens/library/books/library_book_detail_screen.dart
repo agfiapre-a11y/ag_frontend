@@ -7,6 +7,7 @@ import '../../../core/constants.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/data_provider.dart';
 import '../../../services/local_db.dart';
+import 'book_reader_screen.dart';
 
 class LibraryBookDetailScreen extends ConsumerWidget {
   final String bookId;
@@ -144,17 +145,62 @@ class LibraryBookDetailScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 20),
                   ],
-                  if (book.url.isNotEmpty) ...[
+                  // Digital reader (extracted text)
+                  if (book.content.isNotEmpty) ...[
                     ElevatedButton.icon(
-                      onPressed: () => _openLink(context, book.url),
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Read / Download Free'),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => BookReaderScreen(book: book),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.menu_book),
+                      label: const Text('Read Book'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF8B5CF6),
                         foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 48),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle,
+                            size: 14, color: Colors.green),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${book.pageCount} pages · ${_formatWords(book.wordCount)} words',
+                          style: GoogleFonts.poppins(
+                              fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  // PDF download (fallback)
+                  if (book.url.isNotEmpty) ...[
+                    if (book.content.isNotEmpty)
+                      OutlinedButton.icon(
+                        onPressed: () => _openLink(context, book.url),
+                        icon: const Icon(Icons.download, size: 18),
+                        label: const Text('Download PDF'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF8B5CF6),
+                          minimumSize: const Size(double.infinity, 44),
+                        ),
+                      )
+                    else
+                      ElevatedButton.icon(
+                        onPressed: () => _openLink(context, book.url),
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('Read / Download Free'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF8B5CF6),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                      ),
                     const SizedBox(height: 8),
                     Text(
                       book.url,
@@ -204,6 +250,12 @@ class LibraryBookDetailScreen extends ConsumerWidget {
       ),
     );
     return result ?? false;
+  }
+
+  String _formatWords(int count) {
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(0)}K';
+    return count.toString();
   }
 }
 
