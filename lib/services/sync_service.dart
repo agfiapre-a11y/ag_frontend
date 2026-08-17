@@ -1,10 +1,8 @@
-import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:uuid/uuid.dart';
 import '../models/sync_queue_entry.dart';
 import 'local_db.dart';
 import 'supabase_config.dart';
-import 'tenant_context.dart';
 import '../core/constants.dart';
 
 /// Offline-first sync service.
@@ -228,12 +226,9 @@ class SyncService {
 
         final result = await query;
 
-        // Merge into local storage
-        final scopedKey = TenantContext.scopedKey(churchId, boxKey);
-
-        // Users are stored encrypted — merge into encrypted storage + cache
+        // Merge into local encrypted storage
         if (boxKey == HiveBoxes.users) {
-          // Start with existing encrypted data (current cache or encrypted storage)
+          // Users: merge into encrypted storage + cache
           final existing = LocalDb.getAllUsersMap();
           final localMap = Map<String, dynamic>.from(existing);
 
@@ -246,14 +241,11 @@ class SyncService {
             }
           }
 
-          // Save merged data to encrypted storage and refresh cache
           await LocalDb.savePulledUsers(churchId, localMap);
         } else {
-          // Other boxes: unencrypted SharedPreferences
-          final existingData = LocalDb.prefs.getString(scopedKey);
-          final localMap = existingData != null
-              ? Map<String, dynamic>.from(jsonDecode(existingData) as Map)
-              : <String, dynamic>{};
+          // All other boxes: merge into encrypted storage + cache
+          final existing = LocalDb.getAllBoxMapSync(boxKey);
+          final localMap = Map<String, dynamic>.from(existing);
 
           for (final record in result as List) {
             final recordMap = record as Map<String, dynamic>;
@@ -264,7 +256,7 @@ class SyncService {
             }
           }
 
-          await LocalDb.prefs.setString(scopedKey, jsonEncode(localMap));
+          await LocalDb.savePulledBoxData(churchId, boxKey, localMap);
         }
       } catch (e) {
         // Skip tables that don't exist yet or have errors

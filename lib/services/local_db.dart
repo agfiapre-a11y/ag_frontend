@@ -44,6 +44,11 @@ class LocalDb {
     _prefs = await SharedPreferences.getInstance();
     // Pre-load encrypted user data into cache for sync access
     await _refreshUsersCache();
+    // Pre-load all encrypted box data into cache
+    // (only if a tenant context is already active from a previous session)
+    if (TenantContext.isActive) {
+      await _loadAllBoxCaches();
+    }
   }
 
   static SharedPreferences get prefs {
@@ -65,6 +70,7 @@ class LocalDb {
     await prefs.setString(_activeChurchKey, church.id);
     TenantContext.setActiveChurch(church.id);
     await _refreshUsersCache();
+    await _loadAllBoxCaches();
   }
 
   static Church? getChurch() {
@@ -93,6 +99,8 @@ class LocalDb {
     TenantContext.setActiveChurch(churchId);
     // Load encrypted user data for this tenant into cache
     await _refreshUsersCache();
+    // Load all encrypted box data for this tenant into cache
+    await _loadAllBoxCaches();
   }
 
   static Map<String, dynamic> _getAllChurchesMap() {
@@ -296,6 +304,126 @@ class LocalDb {
     }
   }
 
+  // ── Generic Encrypted Box Cache ───────────────────────────────────────────
+  //
+  // All church-scoped data (members, finance, attendance, etc.) is stored
+  // encrypted via SecureStorageWrapper. An in-memory cache (_boxCache) keeps
+  // the decrypted data available for synchronous reads, mirroring the
+  // _usersCache pattern. Cache is populated during init() and after any write.
+
+  /// In-memory cache of decrypted box data, keyed by box name.
+  /// e.g. _boxCache['members_box'] = {id: {...}, ...}
+  static final Map<String, Map<String, dynamic>> _boxCache = {};
+
+  /// Boxes that should be loaded into cache during init().
+  /// Excludes 'users' (handled separately via _usersCache) and 'church'
+  /// (stored under a separate non-tenant-scoped key).
+  static const _encryptedBoxes = [
+    HiveBoxes.branches,
+    HiveBoxes.departments,
+    HiveBoxes.members,
+    HiveBoxes.attendance,
+    HiveBoxes.finance,
+    HiveBoxes.sermons,
+    HiveBoxes.events,
+    HiveBoxes.organization,
+    HiveBoxes.region,
+    HiveBoxes.district,
+    HiveBoxes.area,
+    HiveBoxes.libraryBooks,
+    HiveBoxes.devotionGuides,
+    HiveBoxes.bibleStudyResources,
+    HiveBoxes.sundaySchoolBooks,
+    HiveBoxes.sundaySchoolChapters,
+    HiveBoxes.communityPosts,
+    HiveBoxes.communityComments,
+    HiveBoxes.communityConversations,
+    HiveBoxes.communityMessages,
+    HiveBoxes.welfare,
+    HiveBoxes.welfareFinance,
+    HiveBoxes.departmentWelfare,
+    HiveBoxes.welfareStatements,
+    HiveBoxes.sharedReports,
+    HiveBoxes.ministries,
+    HiveBoxes.ministryFinance,
+    HiveBoxes.ministryAnnouncements,
+    HiveBoxes.contributions,
+    HiveBoxes.benefitRequests,
+    HiveBoxes.budgets,
+    HiveBoxes.financeApprovals,
+  ];
+
+  /// Pre-loads all encrypted boxes into cache during init().
+  static Future<void> _loadAllBoxCaches() async {
+    if (!TenantContext.isActive) return;
+    for (final boxKey in _encryptedBoxes) {
+      await _loadBoxCache(boxKey);
+    }
+  }
+
+  /// Loads a single box from encrypted storage into cache.
+  /// Falls back to old unencrypted format and migrates if found.
+  static Future<void> _loadBoxCache(String boxKey) async {
+    final key = TenantContext.tenantKey(boxKey);
+    // Try encrypted first
+    final encData = await SecureStorageWrapper.getSecureMap(key);
+    if (encData != null) {
+      _boxCache[boxKey] = encData;
+      return;
+    }
+    // Fallback: try old unencrypted format (migration)
+    final raw = prefs.getString(key);
+    if (raw != null) {
+      try {
+        final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+        _boxCache[boxKey] = map;
+        // Migrate: re-save as encrypted, remove old unencrypted data
+        await SecureStorageWrapper.setSecureMap(key, map);
+        await prefs.remove(key);
+        return;
+      } catch (_) {}
+    }
+    _boxCache[boxKey] = {};
+  }
+
+  /// Synchronously reads a box's data from cache.
+  /// Cache must be populated via _loadBoxCache() first (done in init()).
+  static Map<String, dynamic> _getBoxMap(String boxKey) {
+    return Map<String, dynamic>.from(_boxCache[boxKey] ?? {});
+  }
+
+  /// Public sync read for a box's data — used by SyncService to merge
+  /// pulled data with existing data before saving.
+  static Map<String, dynamic> getAllBoxMapSync(String boxKey) {
+    return _getBoxMap(boxKey);
+  }
+
+  /// Writes a box's data to encrypted storage and updates the cache.
+  static Future<void> _saveBoxMap(
+      String boxKey, Map<String, dynamic> data) async {
+    final key = TenantContext.tenantKey(boxKey);
+    await SecureStorageWrapper.setSecureMap(key, data);
+    _boxCache[boxKey] = data;
+  }
+
+  /// Reloads a box's cache from encrypted storage. Called after sync pulls
+  /// new data for a specific box.
+  static Future<void> reloadBoxCache(String boxKey) async {
+    await _loadBoxCache(boxKey);
+  }
+
+  /// Saves data pulled from Supabase sync into encrypted storage for a
+  /// specific box. Merges with existing data. Does NOT enqueue sync changes.
+  static Future<void> savePulledBoxData(
+      String churchId, String boxKey, Map<String, dynamic> data) async {
+    final key = TenantContext.scopedKey(churchId, boxKey);
+    await SecureStorageWrapper.setSecureMap(key, data);
+    // Update cache if this is the active church
+    if (churchId == TenantContext.activeChurchId) {
+      _boxCache[boxKey] = data;
+    }
+  }
+
   // ── Session ───────────────────────────────────────────────────────────────
 
   static Future<void> saveSession(String userId) async {
@@ -330,17 +458,17 @@ class LocalDb {
   static Future<void> saveBranch(Branch branch) async {
     final branches = getAllBranchesMap();
     branches[branch.id] = branch.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.branches), jsonEncode(branches));
+    await _saveBoxMap(HiveBoxes.branches, branches);
   }
 
   static Future<void> deleteBranch(String id) async {
     final branches = getAllBranchesMap();
     branches.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.branches), jsonEncode(branches));
+    await _saveBoxMap(HiveBoxes.branches, branches);
   }
 
   static Future<void> clearAllBranches() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.branches));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.branches)); _boxCache.remove(HiveBoxes.branches);
   }
 
   static Branch? getBranchById(String id) {
@@ -351,9 +479,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllBranchesMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.branches));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.branches);
   }
 
   static List<Branch> getAllBranches({
@@ -389,17 +515,17 @@ class LocalDb {
   static Future<void> saveDepartment(Department dept) async {
     final departments = getAllDepartmentsMap();
     departments[dept.id] = dept.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.departments), jsonEncode(departments));
+    await _saveBoxMap(HiveBoxes.departments, departments);
   }
 
   static Future<void> deleteDepartment(String id) async {
     final departments = getAllDepartmentsMap();
     departments.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.departments), jsonEncode(departments));
+    await _saveBoxMap(HiveBoxes.departments, departments);
   }
 
   static Future<void> clearAllDepartments() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.departments));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.departments)); _boxCache.remove(HiveBoxes.departments);
   }
 
   static Department? getDepartmentById(String id) {
@@ -411,9 +537,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllDepartmentsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.departments));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.departments);
   }
 
   static List<Department> getAllDepartments({
@@ -437,7 +561,7 @@ class LocalDb {
   static Future<void> saveMember(Member member) async {
     final members = getAllMembersMap();
     members[member.id] = member.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.members), jsonEncode(members));
+    await _saveBoxMap(HiveBoxes.members, members);
     await SyncService.enqueueChange(
       boxKey: HiveBoxes.members,
       recordId: member.id,
@@ -449,7 +573,7 @@ class LocalDb {
   static Future<void> deleteMember(String id) async {
     final members = getAllMembersMap();
     members.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.members), jsonEncode(members));
+    await _saveBoxMap(HiveBoxes.members, members);
     await SyncService.enqueueChange(
       boxKey: HiveBoxes.members,
       recordId: id,
@@ -459,7 +583,7 @@ class LocalDb {
   }
 
   static Future<void> clearAllMembers() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.members));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.members)); _boxCache.remove(HiveBoxes.members);
   }
 
   static Member? getMemberById(String id) {
@@ -470,9 +594,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllMembersMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.members));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.members);
   }
 
   static List<Member> getAllMembers({
@@ -513,17 +635,17 @@ class LocalDb {
   static Future<void> saveAttendanceRecord(AttendanceRecord record) async {
     final records = getAllAttendanceRecordsMap();
     records[record.id] = record.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.attendance), jsonEncode(records));
+    await _saveBoxMap(HiveBoxes.attendance, records);
   }
 
   static Future<void> deleteAttendanceRecord(String id) async {
     final records = getAllAttendanceRecordsMap();
     records.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.attendance), jsonEncode(records));
+    await _saveBoxMap(HiveBoxes.attendance, records);
   }
 
   static Future<void> clearAllAttendanceRecords() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.attendance));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.attendance)); _boxCache.remove(HiveBoxes.attendance);
   }
 
   static AttendanceRecord? getAttendanceRecordById(String id) {
@@ -534,9 +656,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllAttendanceRecordsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.attendance));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.attendance);
   }
 
   static List<AttendanceRecord> getAllAttendanceRecords({
@@ -588,7 +708,7 @@ class LocalDb {
   }
 
   static Future<void> clearAllLibraryBooks() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.libraryBooks));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.libraryBooks)); _boxCache.remove(HiveBoxes.libraryBooks);
   }
 
   static LibraryBook? getLibraryBookById(String id) {
@@ -599,9 +719,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllLibraryBooksMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.libraryBooks));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.libraryBooks);
   }
 
   static List<LibraryBook> getAllLibraryBooks({String? churchId}) {
@@ -648,7 +766,7 @@ class LocalDb {
   }
 
   static Future<void> clearAllSundaySchoolBooks() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.sundaySchoolBooks));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.sundaySchoolBooks)); _boxCache.remove(HiveBoxes.sundaySchoolBooks);
   }
 
   static SundaySchoolBook? getSundaySchoolBookById(String id) {
@@ -659,9 +777,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllSundaySchoolBooksMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.sundaySchoolBooks));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.sundaySchoolBooks);
   }
 
   static List<SundaySchoolBook> getAllSundaySchoolBooks({String? churchId}) {
@@ -708,7 +824,7 @@ class LocalDb {
   }
 
   static Future<void> clearAllSundaySchoolChapters() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.sundaySchoolChapters));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.sundaySchoolChapters)); _boxCache.remove(HiveBoxes.sundaySchoolChapters);
   }
 
   static SundaySchoolChapter? getSundaySchoolChapterById(String id) {
@@ -719,9 +835,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllSundaySchoolChaptersMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.sundaySchoolChapters));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.sundaySchoolChapters);
   }
 
   static List<SundaySchoolChapter> getSundaySchoolChaptersForBook(String bookId) {
@@ -781,7 +895,7 @@ class LocalDb {
   }
 
   static Future<void> clearAllDevotionGuides() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.devotionGuides));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.devotionGuides)); _boxCache.remove(HiveBoxes.devotionGuides);
   }
 
   static DevotionGuide? getDevotionGuideById(String id) {
@@ -792,9 +906,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllDevotionGuidesMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.devotionGuides));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.devotionGuides);
   }
 
   static List<DevotionGuide> getAllDevotionGuides({String? churchId}) {
@@ -836,7 +948,7 @@ class LocalDb {
   }
 
   static Future<void> clearAllBibleStudyResources() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.bibleStudyResources));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.bibleStudyResources)); _boxCache.remove(HiveBoxes.bibleStudyResources);
   }
 
   static BibleStudyResource? getBibleStudyResourceById(String id) {
@@ -847,9 +959,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllBibleStudyResourcesMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.bibleStudyResources));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.bibleStudyResources);
   }
 
   static List<BibleStudyResource> getAllBibleStudyResources({String? churchId}) {
@@ -903,9 +1013,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllCommunityPostsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.communityPosts));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.communityPosts);
   }
 
   static List<CommunityPost> getAllCommunityPosts({String? churchId}) {
@@ -947,9 +1055,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllCommentsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.communityComments));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.communityComments);
   }
 
   static List<Comment> getCommentsForPost(String postId) {
@@ -1010,9 +1116,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllConversationsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.communityConversations));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.communityConversations);
   }
 
   static List<Conversation> getConversationsForUser({required String churchId, required String userId}) {
@@ -1057,9 +1161,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllMessagesMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.communityMessages));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.communityMessages);
   }
 
   static List<Message> getMessagesForConversation(String conversationId) {
@@ -1099,17 +1201,17 @@ class LocalDb {
   static Future<void> saveTransaction(FinanceTransaction tx) async {
     final transactions = getAllTransactionsMap();
     transactions[tx.id] = tx.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.finance), jsonEncode(transactions));
+    await _saveBoxMap(HiveBoxes.finance, transactions);
   }
 
   static Future<void> deleteTransaction(String id) async {
     final transactions = getAllTransactionsMap();
     transactions.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.finance), jsonEncode(transactions));
+    await _saveBoxMap(HiveBoxes.finance, transactions);
   }
 
   static Future<void> clearAllTransactions() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.finance));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.finance)); _boxCache.remove(HiveBoxes.finance);
   }
 
   static FinanceTransaction? getTransactionById(String id) {
@@ -1120,9 +1222,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllTransactionsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.finance));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.finance);
   }
 
   static List<FinanceTransaction> getAllTransactions({
@@ -1155,17 +1255,17 @@ class LocalDb {
   static Future<void> saveSermon(Sermon sermon) async {
     final sermons = getAllSermonsMap();
     sermons[sermon.id] = sermon.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.sermons), jsonEncode(sermons));
+    await _saveBoxMap(HiveBoxes.sermons, sermons);
   }
 
   static Future<void> deleteSermon(String id) async {
     final sermons = getAllSermonsMap();
     sermons.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.sermons), jsonEncode(sermons));
+    await _saveBoxMap(HiveBoxes.sermons, sermons);
   }
 
   static Future<void> clearAllSermons() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.sermons));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.sermons)); _boxCache.remove(HiveBoxes.sermons);
   }
 
   static Sermon? getSermonById(String id) {
@@ -1176,9 +1276,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllSermonsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.sermons));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.sermons);
   }
 
   static List<Sermon> getAllSermons({String? churchId, String? branchId}) {
@@ -1199,17 +1297,17 @@ class LocalDb {
   static Future<void> saveEvent(ChurchEvent event) async {
     final events = getAllEventsMap();
     events[event.id] = event.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.events), jsonEncode(events));
+    await _saveBoxMap(HiveBoxes.events, events);
   }
 
   static Future<void> deleteEvent(String id) async {
     final events = getAllEventsMap();
     events.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.events), jsonEncode(events));
+    await _saveBoxMap(HiveBoxes.events, events);
   }
 
   static Future<void> clearAllEvents() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.events));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.events)); _boxCache.remove(HiveBoxes.events);
   }
 
   static ChurchEvent? getEventById(String id) {
@@ -1220,9 +1318,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllEventsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.events));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.events);
   }
 
   static List<ChurchEvent> getAllEvents({
@@ -1256,17 +1352,17 @@ class LocalDb {
   static Future<void> saveOrganization(Organization org) async {
     final organizations = getAllOrganizationsMap();
     organizations[org.id] = org.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.organization), jsonEncode(organizations));
+    await _saveBoxMap(HiveBoxes.organization, organizations);
   }
 
   static Future<void> deleteOrganization(String id) async {
     final organizations = getAllOrganizationsMap();
     organizations.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.organization), jsonEncode(organizations));
+    await _saveBoxMap(HiveBoxes.organization, organizations);
   }
 
   static Future<void> clearAllOrganizations() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.organization));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.organization)); _boxCache.remove(HiveBoxes.organization);
   }
 
   static Organization? getOrganizationById(String id) {
@@ -1277,9 +1373,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllOrganizationsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.organization));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.organization);
   }
 
   static List<Organization> getAllOrganizations() {
@@ -1293,17 +1387,17 @@ class LocalDb {
   static Future<void> saveRegion(Region region) async {
     final regions = getAllRegionsMap();
     regions[region.id] = region.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.region), jsonEncode(regions));
+    await _saveBoxMap(HiveBoxes.region, regions);
   }
 
   static Future<void> deleteRegion(String id) async {
     final regions = getAllRegionsMap();
     regions.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.region), jsonEncode(regions));
+    await _saveBoxMap(HiveBoxes.region, regions);
   }
 
   static Future<void> clearAllRegions() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.region));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.region)); _boxCache.remove(HiveBoxes.region);
   }
 
   static Region? getRegionById(String id) {
@@ -1314,9 +1408,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllRegionsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.region));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.region);
   }
 
   static List<Region> getAllRegions({String? organizationId}) {
@@ -1334,17 +1426,17 @@ class LocalDb {
   static Future<void> saveDistrict(District district) async {
     final districts = getAllDistrictsMap();
     districts[district.id] = district.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.district), jsonEncode(districts));
+    await _saveBoxMap(HiveBoxes.district, districts);
   }
 
   static Future<void> deleteDistrict(String id) async {
     final districts = getAllDistrictsMap();
     districts.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.district), jsonEncode(districts));
+    await _saveBoxMap(HiveBoxes.district, districts);
   }
 
   static Future<void> clearAllDistricts() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.district));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.district)); _boxCache.remove(HiveBoxes.district);
   }
 
   static District? getDistrictById(String id) {
@@ -1355,9 +1447,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllDistrictsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.district));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.district);
   }
 
   static List<District> getAllDistricts({String? regionId}) {
@@ -1375,17 +1465,17 @@ class LocalDb {
   static Future<void> saveArea(Area area) async {
     final areas = getAllAreasMap();
     areas[area.id] = area.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.area), jsonEncode(areas));
+    await _saveBoxMap(HiveBoxes.area, areas);
   }
 
   static Future<void> deleteArea(String id) async {
     final areas = getAllAreasMap();
     areas.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.area), jsonEncode(areas));
+    await _saveBoxMap(HiveBoxes.area, areas);
   }
 
   static Future<void> clearAllAreas() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.area));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.area)); _boxCache.remove(HiveBoxes.area);
   }
 
   static Area? getAreaById(String id) {
@@ -1396,9 +1486,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllAreasMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.area));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.area);
   }
 
   static List<Area> getAllAreas({String? districtId}) {
@@ -1416,17 +1504,17 @@ class LocalDb {
   static Future<void> saveWelfareCase(WelfareCase welfareCase) async {
     final cases = getAllWelfareCasesMap();
     cases[welfareCase.id] = welfareCase.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.welfare), jsonEncode(cases));
+    await _saveBoxMap(HiveBoxes.welfare, cases);
   }
 
   static Future<void> deleteWelfareCase(String id) async {
     final cases = getAllWelfareCasesMap();
     cases.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.welfare), jsonEncode(cases));
+    await _saveBoxMap(HiveBoxes.welfare, cases);
   }
 
   static Future<void> clearAllWelfareCases() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.welfare));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.welfare)); _boxCache.remove(HiveBoxes.welfare);
   }
 
   static WelfareCase? getWelfareCaseById(String id) {
@@ -1437,9 +1525,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllWelfareCasesMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.welfare));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.welfare);
   }
 
   static List<WelfareCase> getAllWelfareCases({
@@ -1479,17 +1565,17 @@ class LocalDb {
   static Future<void> saveWelfareTransaction(WelfareTransaction txn) async {
     final txns = getAllWelfareTransactionsMap();
     txns[txn.id] = txn.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.welfareFinance), jsonEncode(txns));
+    await _saveBoxMap(HiveBoxes.welfareFinance, txns);
   }
 
   static Future<void> deleteWelfareTransaction(String id) async {
     final txns = getAllWelfareTransactionsMap();
     txns.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.welfareFinance), jsonEncode(txns));
+    await _saveBoxMap(HiveBoxes.welfareFinance, txns);
   }
 
   static Future<void> clearAllWelfareTransactions() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.welfareFinance));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.welfareFinance)); _boxCache.remove(HiveBoxes.welfareFinance);
   }
 
   static WelfareTransaction? getWelfareTransactionById(String id) {
@@ -1500,9 +1586,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllWelfareTransactionsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.welfareFinance));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.welfareFinance);
   }
 
   static List<WelfareTransaction> getAllWelfareTransactions({
@@ -1552,17 +1636,17 @@ class LocalDb {
   static Future<void> saveDepartmentWelfare(DepartmentWelfare dw) async {
     final dws = getAllDepartmentWelfareMap();
     dws[dw.id] = dw.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.departmentWelfare), jsonEncode(dws));
+    await _saveBoxMap(HiveBoxes.departmentWelfare, dws);
   }
 
   static Future<void> deleteDepartmentWelfare(String id) async {
     final dws = getAllDepartmentWelfareMap();
     dws.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.departmentWelfare), jsonEncode(dws));
+    await _saveBoxMap(HiveBoxes.departmentWelfare, dws);
   }
 
   static Future<void> clearAllDepartmentWelfare() async {
-    await prefs.remove(TenantContext.tenantKey(HiveBoxes.departmentWelfare));
+    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.departmentWelfare)); _boxCache.remove(HiveBoxes.departmentWelfare);
   }
 
   static DepartmentWelfare? getDepartmentWelfareById(String id) {
@@ -1583,9 +1667,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllDepartmentWelfareMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.departmentWelfare));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.departmentWelfare);
   }
 
   static List<DepartmentWelfare> getAllDepartmentWelfare({
@@ -1615,13 +1697,13 @@ class LocalDb {
   static Future<void> saveWelfareStatement(WelfareStatement stmt) async {
     final stmts = getAllWelfareStatementsMap();
     stmts[stmt.id] = stmt.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.welfareStatements), jsonEncode(stmts));
+    await _saveBoxMap(HiveBoxes.welfareStatements, stmts);
   }
 
   static Future<void> deleteWelfareStatement(String id) async {
     final stmts = getAllWelfareStatementsMap();
     stmts.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.welfareStatements), jsonEncode(stmts));
+    await _saveBoxMap(HiveBoxes.welfareStatements, stmts);
   }
 
   static WelfareStatement? getWelfareStatementById(String id) {
@@ -1632,9 +1714,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllWelfareStatementsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.welfareStatements));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.welfareStatements);
   }
 
   static List<WelfareStatement> getAllWelfareStatements({
@@ -1668,19 +1748,17 @@ class LocalDb {
   static Future<void> saveSharedReport(SharedReport report) async {
     final reports = getAllSharedReportsMap();
     reports[report.id] = report.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.sharedReports), jsonEncode(reports));
+    await _saveBoxMap(HiveBoxes.sharedReports, reports);
   }
 
   static Future<void> deleteSharedReport(String id) async {
     final reports = getAllSharedReportsMap();
     reports.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.sharedReports), jsonEncode(reports));
+    await _saveBoxMap(HiveBoxes.sharedReports, reports);
   }
 
   static Map<String, dynamic> getAllSharedReportsMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.sharedReports));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.sharedReports);
   }
 
   static List<SharedReport> getAllSharedReports({
@@ -1715,7 +1793,7 @@ class LocalDb {
     if (data != null) {
       final report = SharedReport.fromMap(data as Map);
       reports[id] = report.copyWith(isRead: true).toMap();
-      await prefs.setString(TenantContext.tenantKey(HiveBoxes.sharedReports), jsonEncode(reports));
+      await _saveBoxMap(HiveBoxes.sharedReports, reports);
     }
   }
 
@@ -1724,13 +1802,13 @@ class LocalDb {
   static Future<void> saveMinistry(Ministry ministry) async {
     final ministries = getAllMinistriesMap();
     ministries[ministry.id] = ministry.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.ministries), jsonEncode(ministries));
+    await _saveBoxMap(HiveBoxes.ministries, ministries);
   }
 
   static Future<void> deleteMinistry(String id) async {
     final ministries = getAllMinistriesMap();
     ministries.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.ministries), jsonEncode(ministries));
+    await _saveBoxMap(HiveBoxes.ministries, ministries);
   }
 
   static Ministry? getMinistryById(String id) {
@@ -1741,9 +1819,7 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllMinistriesMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.ministries));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.ministries);
   }
 
   static List<Ministry> getAllMinistries({
@@ -1797,19 +1873,17 @@ class LocalDb {
   static Future<void> saveMinistryFinance(MinistryFinance tx) async {
     final map = _getMinistryFinanceMap();
     map[tx.id] = tx.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.ministryFinance), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.ministryFinance, map);
   }
 
   static Future<void> deleteMinistryFinance(String id) async {
     final map = _getMinistryFinanceMap();
     map.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.ministryFinance), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.ministryFinance, map);
   }
 
   static Map<String, dynamic> _getMinistryFinanceMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.ministryFinance));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.ministryFinance);
   }
 
   static List<MinistryFinance> getAllMinistryFinance({
@@ -1853,19 +1927,17 @@ class LocalDb {
   static Future<void> saveMinistryAnnouncement(MinistryAnnouncement ann) async {
     final map = _getMinistryAnnouncementMap();
     map[ann.id] = ann.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.ministryAnnouncements), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.ministryAnnouncements, map);
   }
 
   static Future<void> deleteMinistryAnnouncement(String id) async {
     final map = _getMinistryAnnouncementMap();
     map.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.ministryAnnouncements), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.ministryAnnouncements, map);
   }
 
   static Map<String, dynamic> _getMinistryAnnouncementMap() {
-    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.ministryAnnouncements));
-    if (data == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(data));
+    return _getBoxMap(HiveBoxes.ministryAnnouncements);
   }
 
   static List<MinistryAnnouncement> getAllMinistryAnnouncements({
@@ -1917,19 +1989,17 @@ class LocalDb {
   static Future<void> saveContribution(MemberContribution c) async {
     final map = getAllContributionsMap();
     map[c.id] = c.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.contributions), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.contributions, map);
   }
 
   static Future<void> deleteContribution(String id) async {
     final map = getAllContributionsMap();
     map.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.contributions), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.contributions, map);
   }
 
   static Map<String, dynamic> getAllContributionsMap() {
-    final raw = prefs.getString(TenantContext.tenantKey(HiveBoxes.contributions));
-    if (raw == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    return _getBoxMap(HiveBoxes.contributions);
   }
 
   static List<MemberContribution> getAllContributions({
@@ -1963,19 +2033,17 @@ class LocalDb {
   static Future<void> saveBenefitRequest(BenefitRequest r) async {
     final map = getAllBenefitRequestsMap();
     map[r.id] = r.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.benefitRequests), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.benefitRequests, map);
   }
 
   static Future<void> deleteBenefitRequest(String id) async {
     final map = getAllBenefitRequestsMap();
     map.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.benefitRequests), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.benefitRequests, map);
   }
 
   static Map<String, dynamic> getAllBenefitRequestsMap() {
-    final raw = prefs.getString(TenantContext.tenantKey(HiveBoxes.benefitRequests));
-    if (raw == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    return _getBoxMap(HiveBoxes.benefitRequests);
   }
 
   static List<BenefitRequest> getAllBenefitRequests({
@@ -2009,19 +2077,17 @@ class LocalDb {
   static Future<void> saveBudget(Budget b) async {
     final map = getAllBudgetsMap();
     map[b.id] = b.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.budgets), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.budgets, map);
   }
 
   static Future<void> deleteBudget(String id) async {
     final map = getAllBudgetsMap();
     map.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.budgets), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.budgets, map);
   }
 
   static Map<String, dynamic> getAllBudgetsMap() {
-    final raw = prefs.getString(TenantContext.tenantKey(HiveBoxes.budgets));
-    if (raw == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    return _getBoxMap(HiveBoxes.budgets);
   }
 
   static List<Budget> getAllBudgets({
@@ -2049,19 +2115,17 @@ class LocalDb {
   static Future<void> saveFinanceApproval(FinanceApprovalRequest r) async {
     final map = getAllFinanceApprovalsMap();
     map[r.id] = r.toMap();
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.financeApprovals), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.financeApprovals, map);
   }
 
   static Future<void> deleteFinanceApproval(String id) async {
     final map = getAllFinanceApprovalsMap();
     map.remove(id);
-    await prefs.setString(TenantContext.tenantKey(HiveBoxes.financeApprovals), jsonEncode(map));
+    await _saveBoxMap(HiveBoxes.financeApprovals, map);
   }
 
   static Map<String, dynamic> getAllFinanceApprovalsMap() {
-    final raw = prefs.getString(TenantContext.tenantKey(HiveBoxes.financeApprovals));
-    if (raw == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    return _getBoxMap(HiveBoxes.financeApprovals);
   }
 
   static List<FinanceApprovalRequest> getAllFinanceApprovals({
