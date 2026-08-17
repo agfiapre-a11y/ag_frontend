@@ -24,6 +24,7 @@ import '../../widgets/my_welfare_cases.dart';
 import '../../widgets/finance_dashboard_content.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/emerald_welcome_section.dart';
+import '../../widgets/active_attendance_banner.dart';
 import '../ministry/ministry_dashboard_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -283,6 +284,8 @@ class _MemberHome extends ConsumerWidget {
                 role: 'Member',
               ),
               const SizedBox(height: AppColors.spacing24),
+              // Active attendance sessions banner
+              const ActiveAttendanceBanner(),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppColors.spacing24),
                 child: GestureDetector(
@@ -305,6 +308,40 @@ class _MemberHome extends ConsumerWidget {
                                     fontSize: 15, fontWeight: FontWeight.w600,
                                     color: AppColors.emeraldTextPrimary)),
                             Text('Welfare, Tithe, Offering & Donations',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 12, color: AppColors.emeraldTextSecondary)),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.emeraldTextMuted),
+                    ]),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppColors.spacing24),
+              // My Attendance Stats card
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppColors.spacing24),
+                child: GestureDetector(
+                  onTap: () => context.push('/attendance/my-stats'),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: EmeraldTheme.cardDecoration,
+                    child: Row(children: [
+                      CircleAvatar(
+                        backgroundColor: AppColors.success.withValues(alpha: 0.15),
+                        child: Icon(Icons.analytics, color: AppColors.success),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('My Attendance',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 15, fontWeight: FontWeight.w600,
+                                    color: AppColors.emeraldTextPrimary)),
+                            Text('View your attendance history & stats',
                                 style: GoogleFonts.poppins(
                                     fontSize: 12, color: AppColors.emeraldTextSecondary)),
                           ],
@@ -3100,6 +3137,7 @@ class _CellLeaderHome extends ConsumerWidget {
         ref.read(eventProvider.notifier).refresh();
       },
       children: [
+        const ActiveAttendanceBanner(),
         _SectionTitle('My Group'),
         _DashboardStatGrid(cards: [
           _StatCardData(title: 'Members', value: '${members.length}', icon: Icons.people, route: '/members'),
@@ -3156,6 +3194,7 @@ class _VolunteerHome extends ConsumerWidget {
         ref.read(sermonProvider.notifier).refresh();
       },
       children: [
+        const ActiveAttendanceBanner(),
         _SectionTitle('Overview'),
         _DashboardStatGrid(cards: [
           _StatCardData(title: 'Events', value: '${events.length}', icon: Icons.event, route: '/events'),
@@ -3211,6 +3250,7 @@ class _GuestHome extends ConsumerWidget {
         ref.read(sermonProvider.notifier).refresh();
       },
       children: [
+        const ActiveAttendanceBanner(),
         _SectionTitle('Explore'),
         _DashboardStatGrid(cards: [
           _StatCardData(title: 'Events', value: '${events.length}', icon: Icons.event, route: '/events'),

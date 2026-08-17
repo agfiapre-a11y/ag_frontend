@@ -6,7 +6,6 @@ import '../../core/constants.dart';
 import '../../models/attendance_record.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/data_provider.dart';
-import '../../services/local_db.dart';
 
 /// Member Attendance Stats Screen
 ///
