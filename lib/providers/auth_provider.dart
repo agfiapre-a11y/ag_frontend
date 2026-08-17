@@ -4,6 +4,7 @@ import '../models/church.dart';
 import '../models/tenant_config.dart';
 import '../services/auth_service.dart';
 import '../services/local_db.dart';
+import '../services/sync_service.dart';
 import '../services/tenant_context.dart';
 import '../services/rate_limiter.dart';
 import '../services/api_config.dart';
@@ -114,6 +115,15 @@ class AppStateNotifier extends StateNotifier<AppState> {
           user: result.user,
           church: result.church,
           tenantConfig: result.tenantConfig);
+      // Pull remote data (users, members, etc.) so the admin sees all records
+      // immediately after login, not just the ones in local storage.
+      if (SyncService.isConfigured && result.church != null) {
+        try {
+          await SyncService.pullRemoteChanges(churchId: result.church!.id);
+        } catch (_) {
+          // Sync failure shouldn't block login
+        }
+      }
       return null;
     } catch (e) {
       return 'Login failed: $e';

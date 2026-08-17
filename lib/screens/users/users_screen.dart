@@ -23,6 +23,15 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   String? _roleFilter;
 
   @override
+  void initState() {
+    super.initState();
+    // Refresh user list when screen opens (picks up sync'd users)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(userProvider.notifier).refresh();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final users = ref.watch(userProvider);
     final currentUserId = ref.watch(appStateProvider).user?.id;

@@ -283,6 +283,19 @@ class LocalDb {
     _usersCache = {};
   }
 
+  /// Saves users pulled from Supabase sync into encrypted storage and
+  /// refreshes the in-memory cache. Called by SyncService.pullRemoteChanges.
+  /// Does NOT enqueue sync changes (the data came FROM the cloud).
+  static Future<void> savePulledUsers(
+      String churchId, Map<String, dynamic> users) async {
+    final key = TenantContext.scopedKey(churchId, HiveBoxes.users);
+    await SecureStorageWrapper.setSecureMap(key, users);
+    // Update cache if this is the active church
+    if (churchId == TenantContext.activeChurchId) {
+      _usersCache = users;
+    }
+  }
+
   // ── Session ───────────────────────────────────────────────────────────────
 
   static Future<void> saveSession(String userId) async {

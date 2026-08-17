@@ -230,22 +230,42 @@ class SyncService {
 
         // Merge into local storage
         final scopedKey = TenantContext.scopedKey(churchId, boxKey);
-        final existingData = LocalDb.prefs.getString(scopedKey);
-        final localMap = existingData != null
-            ? Map<String, dynamic>.from(jsonDecode(existingData) as Map)
-            : <String, dynamic>{};
 
-        for (final record in result as List) {
-          final recordMap = record as Map<String, dynamic>;
-          final id = recordMap['id']?.toString();
-          if (id != null) {
-            // Convert snake_case keys back to camelCase for local storage
-            localMap[id] = _keysFromDb(recordMap);
-            pulled++;
+        // Users are stored encrypted — merge into encrypted storage + cache
+        if (boxKey == HiveBoxes.users) {
+          // Start with existing encrypted data (current cache or encrypted storage)
+          final existing = LocalDb.getAllUsersMap();
+          final localMap = Map<String, dynamic>.from(existing);
+
+          for (final record in result as List) {
+            final recordMap = record as Map<String, dynamic>;
+            final id = recordMap['id']?.toString();
+            if (id != null) {
+              localMap[id] = _keysFromDb(recordMap);
+              pulled++;
+            }
           }
-        }
 
-        await LocalDb.prefs.setString(scopedKey, jsonEncode(localMap));
+          // Save merged data to encrypted storage and refresh cache
+          await LocalDb.savePulledUsers(churchId, localMap);
+        } else {
+          // Other boxes: unencrypted SharedPreferences
+          final existingData = LocalDb.prefs.getString(scopedKey);
+          final localMap = existingData != null
+              ? Map<String, dynamic>.from(jsonDecode(existingData) as Map)
+              : <String, dynamic>{};
+
+          for (final record in result as List) {
+            final recordMap = record as Map<String, dynamic>;
+            final id = recordMap['id']?.toString();
+            if (id != null) {
+              localMap[id] = _keysFromDb(recordMap);
+              pulled++;
+            }
+          }
+
+          await LocalDb.prefs.setString(scopedKey, jsonEncode(localMap));
+        }
       } catch (e) {
         // Skip tables that don't exist yet or have errors
         continue;
