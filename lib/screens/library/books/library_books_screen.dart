@@ -23,8 +23,6 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
   @override
   Widget build(BuildContext context) {
     final books = ref.watch(libraryBookProvider);
-    final user = ref.watch(appStateProvider).user!;
-    final canManage = AppRoles.libraryManagerRoles.contains(user.role);
 
     final filtered = books.where((b) {
       final q = _search.toLowerCase();
@@ -61,14 +59,12 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
           ),
         ],
       ),
-      floatingActionButton: canManage
-          ? FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton.extended(
               onPressed: () => context.push('/library/books/add'),
               icon: const Icon(Icons.add),
               label: const Text('Add Book'),
               backgroundColor: AppColors.primary,
-            )
-          : null,
+            ),
       body: Column(
         children: [
           Padding(
@@ -151,7 +147,7 @@ class _BookCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(appStateProvider).user!;
-    final canManage = AppRoles.libraryManagerRoles.contains(user.role);
+    final canManage = AppRoles.canManageBook(user.role, user.id, book.addedById);
 
     return Card(
       child: InkWell(

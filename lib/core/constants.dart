@@ -301,6 +301,30 @@ class AppRoles {
     churchSecretary,
   };
 
+  /// Admin-level roles that can manage (edit/delete) ANY library book,
+  /// regardless of who uploaded it. Non-admin users can only manage books
+  /// they uploaded themselves (addedById == user.id).
+  static const adminRoles = {
+    superSystemAdmin,
+    nationalAdmin,
+    regionalAdmin,
+    districtAdmin,
+    areaAdmin,
+    localChurchAdmin,
+  };
+
+  /// Returns true if [role] is an admin-level role that can manage any
+  /// library book.
+  static bool isAdmin(String role) => adminRoles.contains(role);
+
+  /// Returns true if the user with [role] and [userId] can manage (edit or
+  /// delete) a book uploaded by [addedById]. Admins can manage any book;
+  /// other users can only manage their own.
+  static bool canManageBook(String role, String userId, String addedById) {
+    if (isAdmin(role)) return true;
+    return userId == addedById;
+  }
+
   /// Roles that can moderate the Community (remove any post/comment).
   /// Every authenticated user can post, comment, like, and chat — these
   /// roles can additionally delete content from other users.

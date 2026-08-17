@@ -26,7 +26,7 @@ class LibraryBookDetailScreen extends ConsumerWidget {
     }
 
     final user = ref.watch(appStateProvider).user!;
-    final canManage = AppRoles.libraryManagerRoles.contains(user.role);
+    final canManage = AppRoles.canManageBook(user.role, user.id, book.addedById);
 
     return Scaffold(
       appBar: AppBar(

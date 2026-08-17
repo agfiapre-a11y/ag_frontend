@@ -67,6 +67,8 @@ dependencies:
   geolocator: ^13.0.1
   # Open external links (Library: digital books)
   url_launcher: ^6.3.1
+  # PDF text extraction (Library: digital book reader)
+  flutter_pdf_text: ^0.9.0
 
   flutter_web_plugins:
     sdk: flutter
