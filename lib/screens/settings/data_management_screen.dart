@@ -496,7 +496,6 @@ class _CloudSyncTab extends ConsumerStatefulWidget {
 }
 
 class _CloudSyncTabState extends ConsumerState<_CloudSyncTab> {
-  bool _autoSyncEnabled = false;
   SyncResult? _lastResult;
 
   @override
@@ -599,22 +598,35 @@ class _CloudSyncTabState extends ConsumerState<_CloudSyncTab> {
                 ),
                 const SizedBox(height: 12),
 
-                // Auto sync toggle
-                SwitchListTile(
-                  value: _autoSyncEnabled,
-                  onChanged: isConfigured
-                      ? (v) {
-                          setState(() => _autoSyncEnabled = v);
-                          if (v) {
-                            ref.read(syncProvider.notifier).enableAutoSync();
-                          } else {
-                            ref.read(syncProvider.notifier).disableAutoSync();
-                          }
-                        }
-                      : null,
-                  title: Text('Auto Sync', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500)),
-                  subtitle: Text('Sync every 5 minutes when online', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                  secondary: const Icon(Icons.autorenew),
+                // Auto sync info (always on)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.autorenew, color: Colors.green, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Auto Sync: Always On',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.green)),
+                            Text('Syncs every 30 seconds + on app resume',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 11, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 16),
 

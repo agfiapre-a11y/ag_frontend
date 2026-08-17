@@ -12,6 +12,7 @@ import 'services/seed_multi_church.dart';
 import 'services/library_seed_data.dart';
 import 'services/tenant_context.dart';
 import 'providers/tenant_provider.dart';
+import 'providers/sync_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -116,11 +117,37 @@ Future<void> main() async {
   runApp(const ProviderScope(child: ParadiseAGApp()));
 }
 
-class ParadiseAGApp extends ConsumerWidget {
+class ParadiseAGApp extends ConsumerStatefulWidget {
   const ParadiseAGApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ParadiseAGApp> createState() => _ParadiseAGAppState();
+}
+
+class _ParadiseAGAppState extends ConsumerState<ParadiseAGApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Sync when app returns to foreground
+    if (state == AppLifecycleState.resumed) {
+      ref.read(syncProvider.notifier).sync();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final tenantConfig = ref.watch(tenantConfigProvider);
     final appTitle = tenantConfig?.appName ?? tenantConfig?.name ?? 'Paradise AG';
