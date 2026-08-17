@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/app_user.dart';
 import '../models/church.dart';
+import '../models/member.dart';
 import '../models/tenant_config.dart';
 import '../services/auth_service.dart';
 import '../services/local_db.dart';
@@ -84,6 +85,11 @@ class AppStateNotifier extends StateNotifier<AppState> {
             church: activeChurch,
             tenantConfig: tenantConfig,
           );
+
+          // Fetch users and members from API on auto-login too
+          if (ApiConfig.isConfigured && user.churchId.isNotEmpty) {
+            _fetchUsersAndMembersFromApi(user.churchId).catchError((_) {});
+          }
           return;
         }
       }
@@ -115,18 +121,57 @@ class AppStateNotifier extends StateNotifier<AppState> {
           user: result.user,
           church: result.church,
           tenantConfig: result.tenantConfig);
-      // Pull remote data (users, members, etc.) so the admin sees all records
-      // immediately after login, not just the ones in local storage.
-      if (SyncService.isConfigured && result.church != null) {
-        try {
-          await SyncService.pullRemoteChanges(churchId: result.church!.id);
-        } catch (_) {
-          // Sync failure shouldn't block login
+      // Pull remote data so the admin sees all records immediately after login.
+      // Try NestJS API first (if configured), then Supabase sync as fallback.
+      if (result.church != null) {
+        // 1. Fetch from NestJS backend API
+        if (ApiConfig.isConfigured) {
+          try {
+            await _fetchUsersAndMembersFromApi(result.church!.id);
+          } catch (_) {
+            // API fetch failure shouldn't block login
+          }
+        }
+        // 2. Also try Supabase sync if configured
+        if (SyncService.isConfigured) {
+          try {
+            await SyncService.pullRemoteChanges(churchId: result.church!.id);
+          } catch (_) {
+            // Sync failure shouldn't block login
+          }
         }
       }
       return null;
     } catch (e) {
       return 'Login failed: $e';
+    }
+  }
+
+  /// Fetches users and members from the NestJS backend API and saves
+  /// them to local storage so they're available immediately.
+  Future<void> _fetchUsersAndMembersFromApi(String churchId) async {
+    final api = ApiClient();
+
+    // Fetch users for this tenant
+    try {
+      final usersResp = await api.getList('/auth/users/$churchId');
+      for (final userJson in usersResp) {
+        final user = AppUser.fromBackend(userJson as Map<String, dynamic>);
+        await LocalDb.saveUser(user);
+      }
+    } catch (_) {
+      // Users fetch failed — continue with members
+    }
+
+    // Fetch members for this tenant
+    try {
+      final membersResp = await api.getList('/tenants/$churchId/members');
+      for (final memberJson in membersResp) {
+        final member = Member.fromBackend(memberJson as Map<String, dynamic>);
+        await LocalDb.saveMember(member);
+      }
+    } catch (_) {
+      // Members fetch failed — continue
     }
   }
 

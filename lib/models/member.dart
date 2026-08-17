@@ -89,6 +89,34 @@ class Member {
         areaId: map['areaId'] as String?,
       );
 
+  /// Creates a Member from a NestJS backend API response.
+  /// Backend uses snake_case + firstName/lastName; app uses camelCase + name.
+  factory Member.fromBackend(Map<dynamic, dynamic> map) {
+    final firstName = (map['firstName'] as String?) ?? '';
+    final lastName = (map['lastName'] as String?) ?? '';
+    return Member(
+      id: map['id'] as String,
+      churchId: (map['tenantId'] as String?) ?? '',
+      branchId: '',
+      departmentId: '',
+      name: '$firstName $lastName'.trim(),
+      email: (map['email'] as String?) ?? '',
+      phone: (map['phone'] as String?) ?? '',
+      address: (map['address'] as String?) ?? '',
+      gender: (map['gender'] as String?) ?? 'male',
+      dateOfBirth: map['dateOfBirth'] != null
+          ? DateTime.tryParse(map['dateOfBirth'].toString())
+          : null,
+      maritalStatus: (map['maritalStatus'] as String?) ?? 'single',
+      isEmployed: (map['isEmployed'] as bool?) ?? false,
+      movement: '',
+      membershipDate: map['createdAt'] != null
+          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      isActive: (map['isActive'] as bool?) ?? true,
+    );
+  }
+
   Member copyWith({
     String? name,
     String? email,

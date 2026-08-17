@@ -174,6 +174,46 @@ class AppUser {
     );
   }
 
+  /// Creates an AppUser from a NestJS backend API response.
+  /// Backend uses snake_case; app uses camelCase.
+  factory AppUser.fromBackend(Map<dynamic, dynamic> map) {
+    // Parse roles: backend 'roles' is a text array, 'role' is the legacy single role
+    List<String> parsedRoles;
+    if (map['roles'] is List) {
+      parsedRoles = List<String>.from(map['roles'] as List);
+    } else if (map['role'] != null) {
+      parsedRoles = [map['role'] as String];
+    } else {
+      parsedRoles = [];
+    }
+
+    String parsedActiveRole;
+    if (map['activeRole'] != null) {
+      parsedActiveRole = map['activeRole'] as String;
+    } else if (parsedRoles.isNotEmpty) {
+      parsedActiveRole = parsedRoles.first;
+    } else if (map['role'] != null) {
+      parsedActiveRole = map['role'] as String;
+    } else {
+      parsedActiveRole = '';
+    }
+
+    return AppUser(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      email: map['email'] as String,
+      passwordHash: '',
+      roles: parsedRoles,
+      activeRole: parsedActiveRole,
+      churchId: (map['tenantId'] as String?) ?? '',
+      branchId: '',
+      phone: '',
+      createdAt: map['createdAt'] != null
+          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+    );
+  }
+
   AppUser copyWith({
     String? name,
     String? email,
