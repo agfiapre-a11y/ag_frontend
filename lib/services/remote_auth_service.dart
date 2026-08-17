@@ -41,27 +41,27 @@ class RemoteAuthService {
   }) async {
     final slug = _slugify(churchName);
 
-    final tenantResp = await _api.post('/tenants', {
+    final tenantResp = await _api.request('POST', '/tenants', body: {
       'name': churchName,
       'slug': slug,
       'address': churchAddress,
       'phone': churchPhone,
       'email': churchEmail,
-    });
+    }, timeout: ApiClient.authTimeout);
     final tenant = TenantConfig.fromJson(tenantResp);
 
-    await _api.post('/auth/register', {
+    await _api.request('POST', '/auth/register', body: {
       'name': adminName,
       'email': adminEmail,
       'password': adminPassword,
       'role': 'local_church_admin',
       'tenantId': tenant.id,
-    });
+    }, timeout: ApiClient.authTimeout);
 
-    final authResp = await _api.post('/auth/login', {
+    final authResp = await _api.request('POST', '/auth/login', body: {
       'email': adminEmail,
       'password': adminPassword,
-    });
+    }, timeout: ApiClient.authTimeout);
 
     return _mapAuthResponse(authResp, tenant);
   }
@@ -69,10 +69,10 @@ class RemoteAuthService {
   /// Login a user remotely and return the mapped result.
   static Future<RemoteAuthResult?> login(String email, String password) async {
     try {
-      final authResp = await _api.post('/auth/login', {
+      final authResp = await _api.request('POST', '/auth/login', body: {
         'email': email,
         'password': password,
-      });
+      }, timeout: ApiClient.authTimeout);
       final accessToken = authResp['accessToken'] as String;
       final tenantId = authResp['user']['tenantId'] as String?;
 

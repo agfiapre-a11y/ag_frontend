@@ -17,6 +17,12 @@ class ApiClient {
   factory ApiClient() => _instance;
   ApiClient._internal();
 
+  /// Default timeout for regular API requests.
+  static const defaultTimeout = Duration(seconds: 30);
+
+  /// Shorter timeout for auth requests (login, register).
+  static const authTimeout = Duration(seconds: 15);
+
   String? _token;
   String? _tenantId;
 
@@ -35,11 +41,13 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? body,
     Map<String, String>? extraHeaders,
+    Duration? timeout,
   }) async {
     if (!ApiConfig.isConfigured) {
       throw StateError('API_BASE_URL is not configured');
     }
 
+    final effectiveTimeout = timeout ?? defaultTimeout;
     final uri = Uri.parse('${ApiConfig.baseUrl}$path');
     final headers = <String, String>{
       'Content-Type': 'application/json',
@@ -55,31 +63,31 @@ class ApiClient {
     late final http.Response response;
     switch (method.toUpperCase()) {
       case 'GET':
-        response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 60));
+        response = await http.get(uri, headers: headers).timeout(effectiveTimeout);
         break;
       case 'POST':
         response = await http.post(
           uri,
           headers: headers,
           body: body == null ? null : jsonEncode(body),
-        ).timeout(const Duration(seconds: 60));
+        ).timeout(effectiveTimeout);
         break;
       case 'PUT':
         response = await http.put(
           uri,
           headers: headers,
           body: body == null ? null : jsonEncode(body),
-        ).timeout(const Duration(seconds: 60));
+        ).timeout(effectiveTimeout);
         break;
       case 'PATCH':
         response = await http.patch(
           uri,
           headers: headers,
           body: body == null ? null : jsonEncode(body),
-        ).timeout(const Duration(seconds: 60));
+        ).timeout(effectiveTimeout);
         break;
       case 'DELETE':
-        response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 60));
+        response = await http.delete(uri, headers: headers).timeout(effectiveTimeout);
         break;
       default:
         throw UnsupportedError('HTTP method $method not supported');
@@ -110,7 +118,7 @@ class ApiClient {
     if (_tenantId != null) {
       headers['X-Tenant-Id'] = _tenantId!;
     }
-    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 60));
+    final response = await http.get(uri, headers: headers).timeout(defaultTimeout);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return [];
       final decoded = jsonDecode(response.body);

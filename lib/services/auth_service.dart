@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:uuid/uuid.dart';
+import 'package:http/http.dart' as http;
 import '../models/app_user.dart';
 import '../models/church.dart';
 import '../models/tenant_config.dart';
@@ -113,6 +115,7 @@ class AuthService {
 
   // Login with email + password.
   // Uses the NestJS backend when API_BASE_URL is configured, otherwise local DB.
+  // Falls back to local login if the backend is unreachable (timeout/network error).
   static Future<({AppUser user, Church? church, TenantConfig? tenantConfig})?> login(
       String email, String password) async {
     if (await RateLimiter.isLocked(email)) {
@@ -121,7 +124,8 @@ class AuthService {
 
     if (ApiConfig.isConfigured) {
       try {
-        final result = await RemoteAuthService.login(email, password);
+        final result = await RemoteAuthService.login(email, password)
+            .timeout(const Duration(seconds: 15));
         if (result == null) {
           await RateLimiter.recordFailure(email);
           return null;
@@ -140,6 +144,18 @@ class AuthService {
           return null;
         }
         rethrow;
+      } on TimeoutException catch (_) {
+        // Backend unreachable — fall back to local login
+        return _loginLocal(email, password);
+      } on http.ClientException catch (_) {
+        // Network error — fall back to local login
+        return _loginLocal(email, password);
+      } on StateError catch (_) {
+        // API not actually configured properly — fall back to local
+        return _loginLocal(email, password);
+      } catch (_) {
+        // Any other network/connection error — fall back to local
+        return _loginLocal(email, password);
       }
     }
 
