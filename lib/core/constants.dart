@@ -469,6 +469,8 @@ class HiveBoxes {
   static const libraryBooks = 'library_books_box';
   static const devotionGuides = 'devotion_guides_box';
   static const bibleStudyResources = 'bible_study_resources_box';
+  static const sundaySchoolBooks = 'sunday_school_books_box';
+  static const sundaySchoolChapters = 'sunday_school_chapters_box';
 
   // Community (social networking)
   static const communityPosts = 'community_posts_box';

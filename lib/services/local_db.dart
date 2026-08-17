@@ -27,6 +27,7 @@ import '../models/app_notification.dart';
 import '../models/library_book.dart';
 import '../models/devotion_guide.dart';
 import '../models/bible_study_resource.dart';
+import '../models/sunday_school_book.dart';
 import '../models/community_post.dart';
 import '../models/comment.dart';
 import '../models/conversation.dart';
@@ -598,6 +599,144 @@ class LocalDb {
     }
     all.sort((a, b) => a.title.compareTo(b.title));
     return all;
+  }
+
+  // ── Library: Sunday School Books & Chapters ──────────────────────────────
+
+  static Future<void> saveSundaySchoolBook(SundaySchoolBook book) async {
+    final books = getAllSundaySchoolBooksMap();
+    books[book.id] = book.toMap();
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.sundaySchoolBooks), jsonEncode(books));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.sundaySchoolBooks,
+      recordId: book.id,
+      operation: SyncQueueEntry.opUpsert,
+      data: book.toMap(),
+    );
+  }
+
+  static Future<void> deleteSundaySchoolBook(String id) async {
+    final books = getAllSundaySchoolBooksMap();
+    books.remove(id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.sundaySchoolBooks), jsonEncode(books));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.sundaySchoolBooks,
+      recordId: id,
+      operation: SyncQueueEntry.opDelete,
+      data: {},
+    );
+    // Also remove associated chapters
+    final chapters = getAllSundaySchoolChaptersMap();
+    chapters.removeWhere((_, v) => v['bookId'] == id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.sundaySchoolChapters), jsonEncode(chapters));
+  }
+
+  static Future<void> clearAllSundaySchoolBooks() async {
+    await prefs.remove(TenantContext.tenantKey(HiveBoxes.sundaySchoolBooks));
+  }
+
+  static SundaySchoolBook? getSundaySchoolBookById(String id) {
+    final books = getAllSundaySchoolBooksMap();
+    final data = books[id];
+    if (data == null) return null;
+    return SundaySchoolBook.fromMap(data as Map);
+  }
+
+  static Map<String, dynamic> getAllSundaySchoolBooksMap() {
+    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.sundaySchoolBooks));
+    if (data == null) return {};
+    return Map<String, dynamic>.from(jsonDecode(data));
+  }
+
+  static List<SundaySchoolBook> getAllSundaySchoolBooks({String? churchId}) {
+    final booksMap = getAllSundaySchoolBooksMap();
+    var all = booksMap.values.map((v) => SundaySchoolBook.fromMap(v as Map)).toList();
+    if (churchId != null) {
+      all = all.where((b) => b.churchId == churchId).toList();
+    }
+    all.sort((a, b) => a.startDate.compareTo(b.startDate));
+    return all;
+  }
+
+  static List<SundaySchoolBook> getAllSundaySchoolBooksAcrossChurches() {
+    final map = _getAllAcrossChurches(HiveBoxes.sundaySchoolBooks);
+    return map.values.map((v) => SundaySchoolBook.fromMap(v as Map)).toList()
+      ..sort((a, b) => a.title.compareTo(b.title));
+  }
+
+  // Chapters
+  static Future<void> saveSundaySchoolChapter(SundaySchoolChapter chapter) async {
+    final chapters = getAllSundaySchoolChaptersMap();
+    chapters[chapter.id] = chapter.toMap();
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.sundaySchoolChapters), jsonEncode(chapters));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.sundaySchoolChapters,
+      recordId: chapter.id,
+      operation: SyncQueueEntry.opUpsert,
+      data: chapter.toMap(),
+    );
+  }
+
+  static Future<void> deleteSundaySchoolChapter(String id) async {
+    final chapters = getAllSundaySchoolChaptersMap();
+    chapters.remove(id);
+    await prefs.setString(
+        TenantContext.tenantKey(HiveBoxes.sundaySchoolChapters), jsonEncode(chapters));
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.sundaySchoolChapters,
+      recordId: id,
+      operation: SyncQueueEntry.opDelete,
+      data: {},
+    );
+  }
+
+  static Future<void> clearAllSundaySchoolChapters() async {
+    await prefs.remove(TenantContext.tenantKey(HiveBoxes.sundaySchoolChapters));
+  }
+
+  static SundaySchoolChapter? getSundaySchoolChapterById(String id) {
+    final chapters = getAllSundaySchoolChaptersMap();
+    final data = chapters[id];
+    if (data == null) return null;
+    return SundaySchoolChapter.fromMap(data as Map);
+  }
+
+  static Map<String, dynamic> getAllSundaySchoolChaptersMap() {
+    final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.sundaySchoolChapters));
+    if (data == null) return {};
+    return Map<String, dynamic>.from(jsonDecode(data));
+  }
+
+  static List<SundaySchoolChapter> getSundaySchoolChaptersForBook(String bookId) {
+    final chaptersMap = getAllSundaySchoolChaptersMap();
+    final all = chaptersMap.values
+        .map((v) => SundaySchoolChapter.fromMap(v as Map))
+        .where((c) => c.bookId == bookId)
+        .toList()
+      ..sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
+    return all;
+  }
+
+  static List<SundaySchoolChapter> getAllSundaySchoolChapters({String? churchId}) {
+    final chaptersMap = getAllSundaySchoolChaptersMap();
+    var all = chaptersMap.values
+        .map((v) => SundaySchoolChapter.fromMap(v as Map))
+        .toList();
+    if (churchId != null) {
+      all = all.where((c) => c.churchId == churchId).toList();
+    }
+    all.sort((a, b) => a.sundayDate.compareTo(b.sundayDate));
+    return all;
+  }
+
+  static List<SundaySchoolChapter> getAllSundaySchoolChaptersAcrossChurches() {
+    final map = _getAllAcrossChurches(HiveBoxes.sundaySchoolChapters);
+    return map.values.map((v) => SundaySchoolChapter.fromMap(v as Map)).toList()
+      ..sort((a, b) => a.sundayDate.compareTo(b.sundayDate));
   }
 
   // ── Library: Daily Devotion & Prayer Guide ───────────────────────────────

@@ -24,6 +24,7 @@ import '../models/app_notification.dart';
 import '../models/library_book.dart';
 import '../models/devotion_guide.dart';
 import '../models/bible_study_resource.dart';
+import '../models/sunday_school_book.dart';
 import '../models/community_post.dart';
 import '../models/comment.dart';
 import '../models/conversation.dart';
@@ -708,6 +709,100 @@ final bibleStudyResourceProvider = StateNotifierProvider<
   final user = appState.user;
   return BibleStudyResourceNotifier(churchId,
       crossChurch: _isCrossChurchRole(user?.role));
+});
+
+// ── Library: Sunday School Books & Chapters ──────────────────────────────────
+
+class SundaySchoolBookNotifier extends StateNotifier<List<SundaySchoolBook>> {
+  final String churchId;
+  final bool crossChurch;
+
+  SundaySchoolBookNotifier(this.churchId, {this.crossChurch = false})
+      : super([]) {
+    _load();
+  }
+
+  void _load() {
+    state = crossChurch
+        ? LocalDb.getAllSundaySchoolBooksAcrossChurches()
+        : LocalDb.getAllSundaySchoolBooks(churchId: churchId);
+  }
+
+  Future<void> save(SundaySchoolBook book) async {
+    await LocalDb.saveSundaySchoolBook(book);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteSundaySchoolBook(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final sundaySchoolBookProvider =
+    StateNotifierProvider<SundaySchoolBookNotifier, List<SundaySchoolBook>>(
+        (ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  return SundaySchoolBookNotifier(churchId,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+class SundaySchoolChapterNotifier
+    extends StateNotifier<List<SundaySchoolChapter>> {
+  final String churchId;
+  final String? bookIdFilter;
+  final bool crossChurch;
+
+  SundaySchoolChapterNotifier(this.churchId,
+      {this.bookIdFilter, this.crossChurch = false})
+      : super([]) {
+    _load();
+  }
+
+  void _load() {
+    var all = crossChurch
+        ? LocalDb.getAllSundaySchoolChaptersAcrossChurches()
+        : LocalDb.getAllSundaySchoolChapters(churchId: churchId);
+    if (bookIdFilter != null) {
+      all = all.where((c) => c.bookId == bookIdFilter).toList();
+    }
+    state = all;
+  }
+
+  Future<void> save(SundaySchoolChapter chapter) async {
+    await LocalDb.saveSundaySchoolChapter(chapter);
+    _load();
+  }
+
+  Future<void> delete(String id) async {
+    await LocalDb.deleteSundaySchoolChapter(id);
+    _load();
+  }
+
+  void refresh() => _load();
+}
+
+final sundaySchoolChapterProvider = StateNotifierProvider<
+    SundaySchoolChapterNotifier, List<SundaySchoolChapter>>((ref) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  final user = appState.user;
+  return SundaySchoolChapterNotifier(churchId,
+      crossChurch: _isCrossChurchRole(user?.role));
+});
+
+/// Family provider that returns chapters for a specific book.
+final sundaySchoolChaptersForBookProvider = StateNotifierProvider.family<
+    SundaySchoolChapterNotifier,
+    List<SundaySchoolChapter>,
+    String>((ref, bookId) {
+  final appState = ref.watch(appStateProvider);
+  final churchId = appState.church?.id ?? '';
+  return SundaySchoolChapterNotifier(churchId, bookIdFilter: bookId);
 });
 
 // ── Community: Feed Posts ────────────────────────────────────────────────────

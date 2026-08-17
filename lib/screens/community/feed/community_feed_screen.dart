@@ -7,17 +7,51 @@ import '../../../core/constants.dart';
 import '../../../models/community_post.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/data_provider.dart';
+import '../../../services/local_db.dart';
 import '../../../widgets/community_video_player.dart';
 import '../../../widgets/responsive_scaffold.dart';
 
 /// Public social feed — posts, photos, videos, and status updates from
 /// everyone in the user's church (or all churches for above-church roles).
+///
+/// Includes a "Trending Issues" section at the top showing Sunday School
+/// discussions and the most-liked posts from the past week.
 class CommunityFeedScreen extends ConsumerWidget {
   const CommunityFeedScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final posts = ref.watch(communityPostProvider);
+
+    // Build trending list:
+    // 1. Sunday School discussion posts (linked from chapters)
+    // 2. Most-liked posts from the last 7 days
+    final now = DateTime.now();
+    final weekAgo = now.subtract(const Duration(days: 7));
+
+    // Get all Sunday School discussion post ids
+    final ssChapters = LocalDb.getAllSundaySchoolChapters();
+    final ssDiscussionPostIds = ssChapters
+        .where((c) => c.discussionPostId.isNotEmpty)
+        .map((c) => c.discussionPostId)
+        .toSet();
+
+    final ssDiscussionPosts = posts
+        .where((p) => ssDiscussionPostIds.contains(p.id))
+        .toList();
+
+    final trendingPosts = posts
+        .where((p) =>
+            p.createdAt.isAfter(weekAgo) &&
+            p.likeCount > 0 &&
+            !ssDiscussionPostIds.contains(p.id))
+        .toList()
+      ..sort((a, b) => b.likeCount.compareTo(a.likeCount));
+
+    final trending = <CommunityPost>[
+      ...ssDiscussionPosts.take(5),
+      ...trendingPosts.take(5),
+    ];
 
     return ResponsiveScaffold(
       appBar: AppBar(title: const Text('Community Feed')),
@@ -50,12 +84,154 @@ class CommunityFeedScreen extends ConsumerWidget {
                 ],
               ),
             )
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-              itemCount: posts.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (_, i) => _PostCard(post: posts[i]),
+          : CustomScrollView(
+              slivers: [
+                if (trending.isNotEmpty)
+                  SliverToBoxAdapter(child: _TrendingSection(posts: trending)),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                  sliver: SliverList.separated(
+                    itemCount: posts.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) => _PostCard(post: posts[i]),
+                  ),
+                ),
+              ],
             ),
+    );
+  }
+}
+
+/// "Trending Issues" section — shows Sunday School discussions and popular
+/// posts in a horizontal scrollable strip at the top of the feed.
+class _TrendingSection extends StatelessWidget {
+  final List<CommunityPost> posts;
+
+  const _TrendingSection({required this.posts});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.trending_up, color: AppColors.primary, size: 18),
+            const SizedBox(width: 6),
+            Text('Trending Issues',
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: AppColors.primary)),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+            'Sunday School discussions & popular posts this week',
+            style: GoogleFonts.poppins(
+                fontSize: 11, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 110,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: posts.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                final post = posts[i];
+                final isSundaySchool =
+                    post.text.startsWith('Sunday School Discussion:');
+                return _TrendingCard(
+                    post: post, isSundaySchool: isSundaySchool);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrendingCard extends StatelessWidget {
+  final CommunityPost post;
+  final bool isSundaySchool;
+
+  const _TrendingCard({required this.post, required this.isSundaySchool});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => context.push('/community/feed/${post.id}'),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 220,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: AppColors.cardWhite,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.emeraldCardBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(
+                isSundaySchool
+                    ? Icons.church_outlined
+                    : Icons.local_fire_department_outlined,
+                size: 14,
+                color: isSundaySchool
+                    ? AppColors.primary
+                    : Colors.orange,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                isSundaySchool ? 'Sunday School' : 'Popular',
+                style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: isSundaySchool
+                        ? AppColors.primary
+                        : Colors.orange),
+              ),
+              const Spacer(),
+              Icon(Icons.favorite, size: 12, color: Colors.red.shade400),
+              const SizedBox(width: 2),
+              Text('${post.likeCount}',
+                  style: GoogleFonts.poppins(
+                      fontSize: 10, color: Colors.red.shade400)),
+            ]),
+            const SizedBox(height: 6),
+            Expanded(
+              child: Text(
+                post.text.split('\n').first,
+                style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.emeraldTextPrimary),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${post.authorName} · ${DateFormat('MMM d').format(post.createdAt.toLocal())}',
+              style: GoogleFonts.poppins(
+                  fontSize: 10, color: AppColors.emeraldTextMuted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

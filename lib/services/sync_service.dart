@@ -44,6 +44,8 @@ class SyncService {
     HiveBoxes.libraryBooks: 'library_books',
     HiveBoxes.devotionGuides: 'devotion_guides',
     HiveBoxes.bibleStudyResources: 'bible_study_resources',
+    HiveBoxes.sundaySchoolBooks: 'sunday_school_books',
+    HiveBoxes.sundaySchoolChapters: 'sunday_school_chapters',
     HiveBoxes.communityPosts: 'community_posts',
     HiveBoxes.communityComments: 'community_comments',
     HiveBoxes.communityConversations: 'community_conversations',
@@ -62,6 +64,15 @@ class SyncService {
     'addedById': 'added_by_id',
     'pageCount': 'page_count',
     'wordCount': 'word_count',
+    // sunday_school: date fields and special mappings
+    'startDate': 'start_date',
+    'endDate': 'end_date',
+    'totalChapters': 'total_chapters',
+    'addedByName': 'added_by_name',
+    'bookId': 'book_id',
+    'chapterNumber': 'chapter_number',
+    'sundayDate': 'sunday_date',
+    'discussionPostId': 'discussion_post_id',
   };
 
   /// Converts a camelCase string to snake_case.

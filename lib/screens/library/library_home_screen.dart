@@ -64,6 +64,15 @@ class LibraryHomeScreen extends ConsumerWidget {
             subtitle: 'Guided studies and discussion questions',
             onTap: () => context.push('/library/bible-study'),
           ),
+          const SizedBox(height: 12),
+          _LibrarySectionCard(
+            icon: Icons.church_outlined,
+            iconColor: const Color(0xFFDC2626),
+            title: 'Sunday School',
+            subtitle:
+                'Books mapped to a yearly Sunday timeline with chapter discussions',
+            onTap: () => context.push('/library/sunday-school'),
+          ),
         ],
       ),
     );

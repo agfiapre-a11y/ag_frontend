@@ -69,6 +69,10 @@ import '../screens/library/library_home_screen.dart';
 import '../screens/library/books/library_books_screen.dart';
 import '../screens/library/books/add_edit_library_book_screen.dart';
 import '../screens/library/books/library_book_detail_screen.dart';
+import '../screens/library/sunday_school/sunday_school_screen.dart';
+import '../screens/library/sunday_school/add_edit_sunday_school_screen.dart';
+import '../screens/library/sunday_school/sunday_school_book_detail_screen.dart';
+import '../screens/library/sunday_school/sunday_school_chapter_reader_screen.dart';
 import '../screens/library/devotion/devotion_screen.dart';
 import '../screens/library/devotion/add_edit_devotion_screen.dart';
 import '../screens/library/devotion/devotion_detail_screen.dart';
@@ -423,6 +427,40 @@ final routerProvider = Provider<GoRouter>((ref) {
                 path: ':id',
                 builder: (_, state) => DashboardThemeWrapper(
                     child: BibleStudyDetailScreen(studyId: state.pathParameters['id']!)),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: 'sunday-school',
+            builder: (_, _) =>
+                const DashboardThemeWrapper(child: SundaySchoolScreen()),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (_, _) => const DashboardThemeWrapper(
+                    child: AddEditSundaySchoolScreen()),
+              ),
+              GoRoute(
+                path: 'edit/:id',
+                builder: (_, state) => DashboardThemeWrapper(
+                    child: AddEditSundaySchoolScreen(
+                        bookId: state.pathParameters['id'])),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (_, state) => DashboardThemeWrapper(
+                    child: SundaySchoolBookDetailScreen(
+                        bookId: state.pathParameters['id']!)),
+                routes: [
+                  GoRoute(
+                    path: 'chapter/:chapterId',
+                    builder: (_, state) => DashboardThemeWrapper(
+                        child: SundaySchoolChapterReaderScreen(
+                            bookId: state.pathParameters['id']!,
+                            chapterId:
+                                state.pathParameters['chapterId']!)),
+                  ),
+                ],
               ),
             ],
           ),
