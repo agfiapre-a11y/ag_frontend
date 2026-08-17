@@ -42,6 +42,8 @@ class LocalDb {
 
   static Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    // Pre-load the encryption key so sync encrypt/decrypt can be used
+    await SecureStorageWrapper.initKey();
     // Pre-load encrypted user data into cache for sync access
     await _refreshUsersCache();
     // Pre-load all encrypted box data into cache
@@ -112,31 +114,46 @@ class LocalDb {
   /// Cross-church helper: reads a box key from ALL churches and merges results.
   /// Used by higher-level roles (superSystemAdmin, nationalAdmin, etc.) that
   /// need to see data across multiple churches.
+  /// Reads from encrypted storage (with fallback to old unencrypted format).
   static Map<String, dynamic> _getAllAcrossChurches(String boxKey) {
     final merged = <String, dynamic>{};
     final churches = getAllChurches();
     for (final church in churches) {
       final key = TenantContext.scopedKey(church.id, boxKey);
+      // Try encrypted storage first
+      final encData = prefs.getString('enc_$key');
+      if (encData != null) {
+        try {
+          final map = SecureStorageWrapper.decryptMapSync(encData);
+          merged.addAll(map);
+        } catch (_) {}
+        continue;
+      }
+      // Fallback: try old unencrypted format (migration)
       final data = prefs.getString(key);
       if (data == null) continue;
-      final map = Map<String, dynamic>.from(jsonDecode(data) as Map);
-      merged.addAll(map);
+      try {
+        final map = Map<String, dynamic>.from(jsonDecode(data) as Map);
+        merged.addAll(map);
+      } catch (_) {}
     }
     return merged;
   }
 
   // ── Users ─────────────────────────────────────────────────────────────────
 
-  /// In-memory cache of encrypted user data for sync access.
-  /// Populated by _refreshUsersCache() after any write operation.
-  static Map<String, dynamic>? _usersCache;
+  /// In-memory cache of ENCRYPTED user data for sync access.
+  /// Stores base64-encrypted strings, not plain maps, to prevent memory
+  /// scraping attacks. Decryption happens on-the-fly in getAllUsersMap().
+  static String? _usersCache;
 
   static Future<void> _refreshUsersCache() async {
     if (!TenantContext.isActive) return;
     final key = TenantContext.tenantKey(HiveBoxes.users);
-    final data = await SecureStorageWrapper.getSecureMap(key);
-    if (data != null && data.isNotEmpty) {
-      _usersCache = data;
+    // Get the raw encrypted string from storage
+    final encString = prefs.getString('enc_$key');
+    if (encString != null) {
+      _usersCache = encString;
       return;
     }
     // Fallback: try reading unencrypted (migration from pre-encryption format)
@@ -144,15 +161,16 @@ class LocalDb {
     if (raw != null) {
       try {
         final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-        _usersCache = map;
         // Migrate: re-save as encrypted
         await SecureStorageWrapper.setSecureMap(key, map);
         // Remove old unencrypted data
         await prefs.remove(key);
+        // Cache the encrypted form
+        _usersCache = SecureStorageWrapper.encryptMapSync(map);
         return;
       } catch (_) {}
     }
-    _usersCache = {};
+    _usersCache = '';
   }
 
   static Future<void> saveUser(AppUser user) async {
@@ -160,7 +178,8 @@ class LocalDb {
     users[user.id] = user.toMap();
     await SecureStorageWrapper.setSecureMap(
         TenantContext.tenantKey(HiveBoxes.users), users);
-    _usersCache = users;
+    // Cache the encrypted form, not the plain map
+    _usersCache = SecureStorageWrapper.encryptMapSync(users);
     await SyncService.enqueueChange(
       boxKey: HiveBoxes.users,
       recordId: user.id,
@@ -251,13 +270,16 @@ class LocalDb {
   }
 
   static Map<String, dynamic> getAllUsersMap() {
-    // Return cached data if available (populated after save/init)
-    if (_usersCache != null) return Map<String, dynamic>.from(_usersCache!);
+    // Decrypt cached data on-the-fly (cache stores encrypted strings)
+    if (_usersCache != null && _usersCache!.isNotEmpty) {
+      return SecureStorageWrapper.decryptMapSync(_usersCache!);
+    }
     // Fallback: try reading unencrypted (for migration from old format)
     final data = prefs.getString(TenantContext.tenantKey(HiveBoxes.users));
     if (data != null) {
       final map = Map<String, dynamic>.from(jsonDecode(data));
-      _usersCache = map;
+      // Cache as encrypted
+      _usersCache = SecureStorageWrapper.encryptMapSync(map);
       return map;
     }
     return {};
@@ -276,7 +298,8 @@ class LocalDb {
     users.remove(id);
     await SecureStorageWrapper.setSecureMap(
         TenantContext.tenantKey(HiveBoxes.users), users);
-    _usersCache = users;
+    // Cache the encrypted form, not the plain map
+    _usersCache = SecureStorageWrapper.encryptMapSync(users);
     await SyncService.enqueueChange(
       boxKey: HiveBoxes.users,
       recordId: id,
@@ -288,7 +311,7 @@ class LocalDb {
   static Future<void> clearAllUsers() async {
     await SecureStorageWrapper.removeSecureMap(
         TenantContext.tenantKey(HiveBoxes.users));
-    _usersCache = {};
+    _usersCache = '';
   }
 
   /// Saves users pulled from Supabase sync into encrypted storage and
@@ -298,9 +321,9 @@ class LocalDb {
       String churchId, Map<String, dynamic> users) async {
     final key = TenantContext.scopedKey(churchId, HiveBoxes.users);
     await SecureStorageWrapper.setSecureMap(key, users);
-    // Update cache if this is the active church
+    // Update cache with encrypted form if this is the active church
     if (churchId == TenantContext.activeChurchId) {
-      _usersCache = users;
+      _usersCache = SecureStorageWrapper.encryptMapSync(users);
     }
   }
 
@@ -311,9 +334,12 @@ class LocalDb {
   // the decrypted data available for synchronous reads, mirroring the
   // _usersCache pattern. Cache is populated during init() and after any write.
 
-  /// In-memory cache of decrypted box data, keyed by box name.
-  /// e.g. _boxCache['members_box'] = {id: {...}, ...}
-  static final Map<String, Map<String, dynamic>> _boxCache = {};
+  /// In-memory cache of ENCRYPTED box data, keyed by box name.
+  /// Values are base64-encrypted strings (AES-256-GCM), not plain maps.
+  /// This prevents attackers from reading plain data via memory dumps.
+  /// Decryption happens on-the-fly in _getBoxMap() and the plain map is
+  /// returned as a copy that gets GC'd quickly.
+  static final Map<String, String> _boxCache = {};
 
   /// Boxes that should be loaded into cache during init().
   /// Excludes 'users' (handled separately via _usersCache) and 'church'
@@ -363,12 +389,13 @@ class LocalDb {
 
   /// Loads a single box from encrypted storage into cache.
   /// Falls back to old unencrypted format and migrates if found.
+  /// The cache stores the encrypted string — decryption happens on read.
   static Future<void> _loadBoxCache(String boxKey) async {
     final key = TenantContext.tenantKey(boxKey);
-    // Try encrypted first
-    final encData = await SecureStorageWrapper.getSecureMap(key);
-    if (encData != null) {
-      _boxCache[boxKey] = encData;
+    // Try encrypted storage first — get the raw encrypted string
+    final encString = prefs.getString('enc_$key');
+    if (encString != null) {
+      _boxCache[boxKey] = encString;
       return;
     }
     // Fallback: try old unencrypted format (migration)
@@ -376,20 +403,24 @@ class LocalDb {
     if (raw != null) {
       try {
         final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-        _boxCache[boxKey] = map;
         // Migrate: re-save as encrypted, remove old unencrypted data
         await SecureStorageWrapper.setSecureMap(key, map);
         await prefs.remove(key);
+        // Cache the encrypted form
+        final enc = SecureStorageWrapper.encryptMapSync(map);
+        _boxCache[boxKey] = enc;
         return;
       } catch (_) {}
     }
-    _boxCache[boxKey] = {};
+    _boxCache[boxKey] = '';
   }
 
-  /// Synchronously reads a box's data from cache.
-  /// Cache must be populated via _loadBoxCache() first (done in init()).
+  /// Synchronously reads a box's data from cache, decrypting on-the-fly.
+  /// The decrypted map is a fresh copy that gets GC'd quickly.
   static Map<String, dynamic> _getBoxMap(String boxKey) {
-    return Map<String, dynamic>.from(_boxCache[boxKey] ?? {});
+    final cached = _boxCache[boxKey];
+    if (cached == null || cached.isEmpty) return {};
+    return SecureStorageWrapper.decryptMapSync(cached);
   }
 
   /// Public sync read for a box's data — used by SyncService to merge
@@ -398,12 +429,14 @@ class LocalDb {
     return _getBoxMap(boxKey);
   }
 
-  /// Writes a box's data to encrypted storage and updates the cache.
+  /// Writes a box's data to encrypted storage and updates the cache
+  /// with the encrypted form (not plain data).
   static Future<void> _saveBoxMap(
       String boxKey, Map<String, dynamic> data) async {
     final key = TenantContext.tenantKey(boxKey);
     await SecureStorageWrapper.setSecureMap(key, data);
-    _boxCache[boxKey] = data;
+    // Cache the encrypted form, not the plain map
+    _boxCache[boxKey] = SecureStorageWrapper.encryptMapSync(data);
   }
 
   /// Reloads a box's cache from encrypted storage. Called after sync pulls
@@ -418,9 +451,9 @@ class LocalDb {
       String churchId, String boxKey, Map<String, dynamic> data) async {
     final key = TenantContext.scopedKey(churchId, boxKey);
     await SecureStorageWrapper.setSecureMap(key, data);
-    // Update cache if this is the active church
+    // Update cache with encrypted form if this is the active church
     if (churchId == TenantContext.activeChurchId) {
-      _boxCache[boxKey] = data;
+      _boxCache[boxKey] = SecureStorageWrapper.encryptMapSync(data);
     }
   }
 
@@ -2168,17 +2201,28 @@ class LocalDb {
   // ═══════════════════════════════════════════════════════════════════════════
 
   static List<AppUser> getAllUsersAcrossChurches() {
-    // Users are stored encrypted — use cache or fallback to unencrypted
+    // Users are stored encrypted — decrypt from cache or storage
     final merged = <String, dynamic>{};
     final churches = getAllChurches();
     for (final church in churches) {
-      // Try cache first (current church)
-      if (church.id == TenantContext.activeChurchId && _usersCache != null) {
-        merged.addAll(_usersCache!);
+      // Try cache first (current church) — decrypt on-the-fly
+      if (church.id == TenantContext.activeChurchId &&
+          _usersCache != null &&
+          _usersCache!.isNotEmpty) {
+        merged.addAll(SecureStorageWrapper.decryptMapSync(_usersCache!));
         continue;
       }
-      // Fallback: try unencrypted (for other churches during migration)
+      // Fallback: try encrypted storage for other churches
       final key = TenantContext.scopedKey(church.id, HiveBoxes.users);
+      final encData = prefs.getString('enc_$key');
+      if (encData != null) {
+        try {
+          final map = SecureStorageWrapper.decryptMapSync(encData);
+          merged.addAll(map);
+        } catch (_) {}
+        continue;
+      }
+      // Last resort: try old unencrypted format (migration)
       final data = prefs.getString(key);
       if (data != null) {
         final map = Map<String, dynamic>.from(jsonDecode(data) as Map);

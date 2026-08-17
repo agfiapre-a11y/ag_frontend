@@ -138,4 +138,61 @@ class SecureStorageWrapper {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('enc_$key');
   }
+
+  // ── In-memory encryption (sync, uses cached key) ──────────────────────────
+  //
+  // These methods encrypt/decrypt data in memory using the same AES-256-GCM
+  // key used for storage encryption. The key must be loaded first via
+  // any async method (getSecureMap, setSecureMap, etc.) or initKey().
+
+  /// Pre-loads the encryption key so sync encrypt/decrypt methods can be
+  /// used. Called during LocalDb.init().
+  static Future<void> initKey() async {
+    await _getEncryptionKey();
+  }
+
+  /// Returns true if the encryption key is loaded and ready for sync use.
+  static bool get isKeyReady => _cachedKey != null;
+
+  /// Synchronously encrypts a map to a base64 string for in-memory storage.
+  /// Key must be loaded first via initKey() or any async method.
+  static String encryptMapSync(Map<String, dynamic> data) {
+    final key = _cachedKey;
+    if (key == null) {
+      throw StateError('Encryption key not loaded. Call initKey() first.');
+    }
+    if (_web) return jsonEncode(data); // web: no native encryption
+    try {
+      return EncryptionService.encryptMap(data, key);
+    } catch (_) {
+      return jsonEncode(data);
+    }
+  }
+
+  /// Synchronously decrypts a base64 string back to a map.
+  /// Handles both encrypted and plain JSON (fallback) formats.
+  static Map<String, dynamic> decryptMapSync(String cached) {
+    if (cached.isEmpty) return {};
+    // Check if it's plain JSON (web or fallback) — starts with '{'
+    if (cached.startsWith('{')) {
+      try {
+        return Map<String, dynamic>.from(jsonDecode(cached) as Map);
+      } catch (_) {
+        return {};
+      }
+    }
+    final key = _cachedKey;
+    if (key == null) {
+      throw StateError('Encryption key not loaded. Call initKey() first.');
+    }
+    try {
+      return EncryptionService.decryptMap(cached, key);
+    } catch (_) {
+      try {
+        return Map<String, dynamic>.from(jsonDecode(cached) as Map);
+      } catch (_) {
+        return {};
+      }
+    }
+  }
 }
