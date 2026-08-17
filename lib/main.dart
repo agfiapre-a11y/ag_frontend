@@ -5,6 +5,7 @@ import 'core/dynamic_theme.dart';
 import 'core/web_url_strategy_stub.dart'
     if (dart.library.html) 'core/web_url_strategy.dart' as web_url;
 import 'services/local_db.dart';
+import 'services/access_control_service.dart';
 import 'services/supabase_config.dart';
 import 'services/seed_data_service.dart';
 import 'services/seed_role_users.dart';
@@ -50,6 +51,7 @@ Future<void> main() async {
 
   try {
     await LocalDb.init();
+    await AccessControlService.init();
     await SupabaseConfig.initialize();
 
     final hasSeeded = LocalDb.prefs.getBool('has_seeded') ?? false;

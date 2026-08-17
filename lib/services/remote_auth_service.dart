@@ -187,7 +187,7 @@ class RemoteAuthService {
       name: userJson['name'] as String,
       email: userJson['email'] as String,
       passwordHash: '',
-      role: _mapRole(userJson['role'] as String),
+      roles: [_mapRole(userJson['role'] as String)], activeRole: _mapRole(userJson['role'] as String),
       churchId: userJson['tenantId'] as String? ?? '',
       branchId: '',
       phone: '',

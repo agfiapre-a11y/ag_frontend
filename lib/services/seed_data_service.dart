@@ -151,7 +151,7 @@ class SeedDataService {
         email: '${name.toLowerCase().replaceAll(' ', '.')}@paradiseag.com',
         passwordHash: AuthService.hashPassword('Password123'),
         phone: '+233${_randomPhoneNumber()}',
-        role: role,
+        roles: [role], activeRole: role,
         createdAt: DateTime.now().subtract(const Duration(days: 90)),
       );
       await LocalDb.saveUser(user);

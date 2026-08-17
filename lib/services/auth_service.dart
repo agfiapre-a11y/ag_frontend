@@ -14,6 +14,7 @@ import 'api_config.dart';
 import 'api_client.dart';
 import 'remote_auth_service.dart';
 import 'auth_token_manager.dart';
+import '../core/role_dashboard_catalog.dart';
 
 class AuthService {
   static const _uuid = Uuid();
@@ -95,7 +96,8 @@ class AuthService {
       name: adminName,
       email: adminEmail.toLowerCase().trim(),
       passwordHash: hashPassword(adminPassword),
-      role: AppRoles.localChurchAdmin,
+      roles: const [AppRoles.localChurchAdmin],
+      activeRole: AppRoles.localChurchAdmin,
       churchId: churchId,
       branchId: '',
       phone: adminPhone,
@@ -164,7 +166,7 @@ class AuthService {
       await LocalDb.saveUser(migrated);
     }
 
-    if (AppRoles.isAboveChurchLevel(user.role)) {
+    if (AppRoles.isAboveChurchLevel(user.activeRole)) {
       final churches = LocalDb.getAllChurches();
       if (churches.isNotEmpty) {
         await LocalDb.setActiveChurch(churches.first.id);
@@ -242,6 +244,40 @@ class AuthService {
     return LocalDb.getUserById(userId);
   }
 
+  /// Switches the active role for the current user.
+  /// The role must be in the user's roles array (or assigned via access control).
+  /// Returns the updated user, or null if the switch failed.
+  static Future<AppUser?> switchRole(String role) async {
+    final user = currentUser();
+    if (user == null) return null;
+
+    // Check if the role is in the user's roles array
+    List<String> newRoles = user.roles;
+    if (!user.roles.contains(role)) {
+      // Check if the role was assigned via access control grants
+      final dashKey = RoleDashboardCatalog.dashboardKeyForRole(role);
+      if (dashKey.isEmpty) return null;
+
+      // Add the role to the user's roles array
+      newRoles = [...user.roles, role];
+    }
+
+    final updated = user.copyWith(
+      roles: newRoles,
+      activeRole: role,
+    );
+
+    await LocalDb.saveUser(updated);
+    await AuditService.log(
+      actorId: user.id,
+      actorName: user.name,
+      action: 'role_switch',
+      resource: 'auth',
+    );
+
+    return updated;
+  }
+
   static Future<AppUser?> currentUserAsync() async {
     final userId = await SessionManager.getValidSessionUserId();
     if (userId == null) return null;
@@ -305,7 +341,8 @@ class AuthService {
       name: name,
       email: email.toLowerCase().trim(),
       passwordHash: hashPassword(password),
-      role: role,
+      roles: [role],
+      activeRole: role,
       churchId: churchId,
       branchId: branchId,
       departmentId: departmentId,

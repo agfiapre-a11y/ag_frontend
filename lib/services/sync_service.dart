@@ -48,6 +48,8 @@ class SyncService {
     HiveBoxes.communityComments: 'community_comments',
     HiveBoxes.communityConversations: 'community_conversations',
     HiveBoxes.communityMessages: 'community_messages',
+    HiveBoxes.accessGrants: 'access_grants',
+    HiveBoxes.accessActivities: 'access_activities',
   };
 
   /// Special field mappings (app field name → database column name).

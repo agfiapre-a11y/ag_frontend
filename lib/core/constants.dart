@@ -477,6 +477,10 @@ class HiveBoxes {
   static const communityComments = 'community_comments_box';
   static const communityConversations = 'community_conversations_box';
   static const communityMessages = 'community_messages_box';
+
+  // Access control (page-level grants + activity logging)
+  static const accessGrants = 'access_grants_box';
+  static const accessActivities = 'access_activities_box';
 }
 
 class HiveKeys {

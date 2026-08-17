@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/dashboard_theme_wrapper.dart';
 import '../providers/auth_provider.dart';
+import '../core/route_role_guard.dart';
 import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/setup_screen.dart';
@@ -40,6 +41,7 @@ import '../screens/departments/add_edit_department_screen.dart';
 import '../screens/departments/department_detail_screen.dart';
 import '../screens/settings/church_settings_screen.dart';
 import '../screens/settings/data_management_screen.dart';
+import '../screens/access_control/access_control_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/organizations/organizations_screen.dart';
 import '../screens/organizations/add_edit_organization_screen.dart';
@@ -109,6 +111,12 @@ class _RouterNotifier extends ChangeNotifier {
         return '/login';
       case AppInitState.authenticated:
         if (loc == '/' || loc == '/login' || loc == '/setup') {
+          return '/home';
+        }
+        // Role-based route guard: check if the user's active role can access
+        // the requested route. If not, redirect to /home.
+        final user = appState.user;
+        if (user != null && !RouteRoleGuard.canAccess(user.activeRole, loc)) {
           return '/home';
         }
         return null;
@@ -320,6 +328,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings/data-management',
         builder: (_, _) => const DashboardThemeWrapper(child: DataManagementScreen()),
+      ),
+      GoRoute(
+        path: '/access-control',
+        builder: (_, _) => const DashboardThemeWrapper(child: AccessControlScreen()),
       ),
       GoRoute(
         path: '/departments',

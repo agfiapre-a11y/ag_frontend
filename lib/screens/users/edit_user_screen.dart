@@ -64,7 +64,7 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
       final updated = _user!.copyWith(
         name: _nameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
-        role: _role,
+        roles: [_role], activeRole: _role,
         branchId: '',
         departmentId: AppRoles.departmentScopedRoles.contains(_role)
             ? (_departmentId ?? '')

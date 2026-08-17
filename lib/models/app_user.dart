@@ -3,7 +3,20 @@ class AppUser {
   final String name;
   final String email;
   final String passwordHash;
-  final String role;
+
+  /// All roles assigned to this user. A user can have multiple roles
+  /// (e.g. financeOfficer + churchSecretary) and switch between them
+  /// at runtime via [activeRole].
+  final List<String> roles;
+
+  /// The currently active role — must be one of [roles].
+  /// Used for routing, nav filtering, and access control.
+  final String activeRole;
+
+  /// Backward-compatible getter: returns the activeRole.
+  /// Code that hasn't been migrated to multi-role can still use `user.role`.
+  String get role => activeRole;
+
   final String churchId;
   final String branchId;
   final String departmentId;
@@ -21,7 +34,7 @@ class AppUser {
   final String? regionId;
   final String? districtId;
   final String? areaId;
-  
+
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -30,7 +43,8 @@ class AppUser {
     required this.name,
     required this.email,
     required this.passwordHash,
-    required this.role,
+    required this.roles,
+    required this.activeRole,
     required this.churchId,
     required this.branchId,
     this.departmentId = '',
@@ -53,7 +67,10 @@ class AppUser {
         'name': name,
         'email': email,
         'passwordHash': passwordHash,
-        'role': role,
+        'roles': roles,
+        'activeRole': activeRole,
+        // Keep 'role' for backward compatibility with older clients
+        'role': activeRole,
         'churchId': churchId,
         'branchId': branchId,
         'departmentId': departmentId,
@@ -78,7 +95,10 @@ class AppUser {
         'id': id,
         'name': name,
         'email': email,
-        'role': role,
+        'roles': roles,
+        'activeRole': activeRole,
+        // Keep 'role' for backward compatibility with older clients
+        'role': activeRole,
         'churchId': churchId,
         'branchId': branchId,
         'departmentId': departmentId,
@@ -96,38 +116,70 @@ class AppUser {
         'updatedAt': updatedAt?.toIso8601String(),
       };
 
-  factory AppUser.fromMap(Map<dynamic, dynamic> map) => AppUser(
-        id: map['id'] as String,
-        name: map['name'] as String,
-        email: map['email'] as String,
-        passwordHash: (map['passwordHash'] as String?) ?? '',
-        role: map['role'] as String,
-        churchId: (map['churchId'] as String?) ?? '',
-        branchId: (map['branchId'] as String?) ?? '',
-        departmentId: (map['departmentId'] as String?) ?? '',
-        phone: (map['phone'] as String?) ?? '',
-        dateOfBirth: map['dateOfBirth'] != null
-            ? DateTime.parse(map['dateOfBirth'] as String)
-            : null,
-        gender: (map['gender'] as String?) ?? 'male',
-        maritalStatus: (map['maritalStatus'] as String?) ?? 'single',
-        isEmployed: (map['isEmployed'] as bool?) ?? false,
-        movement: (map['movement'] as String?) ?? '',
-        organizationId: map['organizationId'] as String?,
-        regionId: map['regionId'] as String?,
-        districtId: map['districtId'] as String?,
-        areaId: map['areaId'] as String?,
-        createdAt: DateTime.parse(map['createdAt'] as String),
-        updatedAt: map['updatedAt'] != null
-            ? DateTime.parse(map['updatedAt'] as String)
-            : null,
-      );
+  factory AppUser.fromMap(Map<dynamic, dynamic> map) {
+    // Parse roles: support both new 'roles' array and legacy 'role' string
+    List<String> parsedRoles;
+    if (map['roles'] != null) {
+      parsedRoles = (map['roles'] as List).map((e) => e.toString()).toList();
+    } else if (map['role'] != null) {
+      // Legacy: single role string → migrate to array
+      parsedRoles = [map['role'] as String];
+    } else {
+      parsedRoles = [];
+    }
+
+    // activeRole: use explicit field, or fall back to first role, or legacy 'role'
+    String parsedActiveRole;
+    if (map['activeRole'] != null) {
+      parsedActiveRole = map['activeRole'] as String;
+    } else if (parsedRoles.isNotEmpty) {
+      parsedActiveRole = parsedRoles.first;
+    } else if (map['role'] != null) {
+      parsedActiveRole = map['role'] as String;
+    } else {
+      parsedActiveRole = '';
+    }
+
+    // Ensure activeRole is in roles (data integrity)
+    if (parsedRoles.isNotEmpty && !parsedRoles.contains(parsedActiveRole)) {
+      parsedActiveRole = parsedRoles.first;
+    }
+
+    return AppUser(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      email: map['email'] as String,
+      passwordHash: (map['passwordHash'] as String?) ?? '',
+      roles: parsedRoles,
+      activeRole: parsedActiveRole,
+      churchId: (map['churchId'] as String?) ?? '',
+      branchId: (map['branchId'] as String?) ?? '',
+      departmentId: (map['departmentId'] as String?) ?? '',
+      phone: (map['phone'] as String?) ?? '',
+      dateOfBirth: map['dateOfBirth'] != null
+          ? DateTime.parse(map['dateOfBirth'] as String)
+          : null,
+      gender: (map['gender'] as String?) ?? 'male',
+      maritalStatus: (map['maritalStatus'] as String?) ?? 'single',
+      isEmployed: (map['isEmployed'] as bool?) ?? false,
+      movement: (map['movement'] as String?) ?? '',
+      organizationId: map['organizationId'] as String?,
+      regionId: map['regionId'] as String?,
+      districtId: map['districtId'] as String?,
+      areaId: map['areaId'] as String?,
+      createdAt: DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] != null
+          ? DateTime.parse(map['updatedAt'] as String)
+          : null,
+    );
+  }
 
   AppUser copyWith({
     String? name,
     String? email,
     String? passwordHash,
-    String? role,
+    List<String>? roles,
+    String? activeRole,
     String? churchId,
     String? branchId,
     String? departmentId,
@@ -147,7 +199,8 @@ class AppUser {
         name: name ?? this.name,
         email: email ?? this.email,
         passwordHash: passwordHash ?? this.passwordHash,
-        role: role ?? this.role,
+        roles: roles ?? this.roles,
+        activeRole: activeRole ?? this.activeRole,
         churchId: churchId ?? this.churchId,
         branchId: branchId ?? this.branchId,
         departmentId: departmentId ?? this.departmentId,
@@ -164,4 +217,11 @@ class AppUser {
         createdAt: createdAt,
         updatedAt: updatedAt ?? DateTime.now(),
       );
+
+  /// Returns true if the user has the given role in their roles array.
+  bool hasRole(String role) => roles.contains(role);
+
+  /// Returns true if the user has any of the given roles.
+  bool hasAnyRole(List<String> rolesToCheck) =>
+      rolesToCheck.any((r) => roles.contains(r));
 }

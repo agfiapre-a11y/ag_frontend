@@ -174,6 +174,18 @@ class AppStateNotifier extends StateNotifier<AppState> {
     }
   }
 
+  /// Switches the active role for the current user.
+  /// The role must be in the user's roles array or assigned via access control.
+  /// Returns true on success, false on failure.
+  Future<bool> switchRole(String role) async {
+    final updated = await AuthService.switchRole(role);
+    if (updated != null) {
+      state = state.copyWith(user: updated);
+      return true;
+    }
+    return false;
+  }
+
   void refresh() => _init();
 }
 
