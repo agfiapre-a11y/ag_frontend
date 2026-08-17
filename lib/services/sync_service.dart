@@ -1,6 +1,7 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:uuid/uuid.dart';
 import '../models/sync_queue_entry.dart';
+import '../models/church.dart';
 import 'local_db.dart';
 import 'supabase_config.dart';
 import '../core/constants.dart';
@@ -195,12 +196,66 @@ class SyncService {
 
   // ── Pull (cloud → local) ──────────────────────────────────────────────────
 
+  /// Resolves the correct Supabase tenant_id for a given local church.
+  /// When the app uses local login (backend unreachable), the local church ID
+  /// is a random UUID that doesn't match the Supabase tenant_id. This method
+  /// looks up the tenant by church name and returns the correct ID.
+  static Future<String> _resolveTenantId(String churchId) async {
+    if (!SupabaseConfig.isConfigured) return churchId;
+    final client = SupabaseConfig.client;
+    if (client == null) return churchId;
+
+    // First, try the churchId directly — if it matches a tenant, use it
+    try {
+      final direct = await client
+          .from('tenants')
+          .select('id')
+          .eq('id', churchId)
+          .limit(1);
+      if (direct.isNotEmpty) return churchId;
+    } catch (_) {}
+
+    // Try to find by church name from local storage
+    final church = LocalDb.getChurchById(churchId);
+    if (church != null) {
+      try {
+        // Look up by name (case-insensitive)
+        final byName = await client
+            .from('tenants')
+            .select('id, name')
+            .ilike('name', church.name)
+            .limit(1);
+        if (byName.isNotEmpty) {
+          final supabaseId = byName.first['id'] as String;
+          // Update the local church ID to match Supabase
+          final updated = Church(
+            id: supabaseId,
+            name: church.name,
+            adminId: church.adminId,
+            address: church.address,
+            phone: church.phone,
+            email: church.email,
+            createdAt: church.createdAt,
+          );
+          await LocalDb.saveChurch(updated);
+          await LocalDb.setActiveChurch(supabaseId);
+          return supabaseId;
+        }
+      } catch (_) {}
+    }
+
+    return churchId;
+  }
+
   /// Pulls remote changes from Supabase and merges into local storage.
   static Future<int> pullRemoteChanges({required String churchId}) async {
     if (!SupabaseConfig.isConfigured) return 0;
 
     final client = SupabaseConfig.client;
     if (client == null) return 0;
+
+    // Resolve the correct Supabase tenant_id (may differ from local church ID)
+    final tenantId = await _resolveTenantId(churchId);
 
     final lastSync = LocalDb.getLastSyncTime();
     final since = lastSync ?? DateTime(2000);
@@ -223,7 +278,7 @@ class SyncService {
             boxKey != HiveBoxes.district &&
             boxKey != HiveBoxes.area &&
             boxKey != HiveBoxes.church) {
-          query = query.eq('tenant_id', churchId);
+          query = query.eq('tenant_id', tenantId);
         }
 
         final result = await query;

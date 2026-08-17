@@ -122,23 +122,12 @@ class AppStateNotifier extends StateNotifier<AppState> {
           church: result.church,
           tenantConfig: result.tenantConfig);
       // Pull remote data so the admin sees all records immediately after login.
-      // Try NestJS API first (if configured), then Supabase sync as fallback.
+      // This fetches from both the NestJS API and Supabase.
       if (result.church != null) {
-        // 1. Fetch from NestJS backend API
-        if (ApiConfig.isConfigured) {
-          try {
-            await _fetchUsersAndMembersFromApi(result.church!.id);
-          } catch (_) {
-            // API fetch failure shouldn't block login
-          }
-        }
-        // 2. Also try Supabase sync if configured
-        if (SyncService.isConfigured) {
-          try {
-            await SyncService.pullRemoteChanges(churchId: result.church!.id);
-          } catch (_) {
-            // Sync failure shouldn't block login
-          }
+        try {
+          await _fetchUsersAndMembersFromApi(result.church!.id);
+        } catch (_) {
+          // Fetch failure shouldn't block login
         }
       }
       return null;
@@ -149,6 +138,7 @@ class AppStateNotifier extends StateNotifier<AppState> {
 
   /// Fetches users and members from the NestJS backend API and saves
   /// them to local storage so they're available immediately.
+  /// Also triggers a Supabase sync to fetch books and other data.
   Future<void> _fetchUsersAndMembersFromApi(String churchId) async {
     final api = ApiClient();
 
@@ -172,6 +162,16 @@ class AppStateNotifier extends StateNotifier<AppState> {
       }
     } catch (_) {
       // Members fetch failed — continue
+    }
+
+    // Also pull from Supabase (books, users, etc.)
+    // The sync service resolves the correct tenant_id automatically.
+    if (SyncService.isConfigured) {
+      try {
+        await SyncService.pullRemoteChanges(churchId: churchId);
+      } catch (_) {
+        // Supabase sync failure shouldn't block login
+      }
     }
   }
 
