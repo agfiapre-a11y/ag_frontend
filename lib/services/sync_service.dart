@@ -1,4 +1,5 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/sync_queue_entry.dart';
 import '../models/church.dart';
@@ -118,12 +119,26 @@ class SyncService {
   static Map<String, dynamic> keysFromDb(Map<String, dynamic> map) =>
       _keysFromDb(map);
 
+  /// Global tables that have no tenant-scoping column.
+  static const _globalTables = {
+    'tenants',
+    'organizations',
+    'regions',
+    'districts',
+    'areas',
+  };
+
   /// Fetches all records from a Supabase table for a given tenant.
   /// Returns records with keys converted to camelCase (app format).
   /// Returns empty list if Supabase is not configured or fetch fails.
   ///
   /// [columns] — optional comma-separated list of columns to select
   /// (e.g. 'id,title,tenant_id' to exclude large fields like content).
+  ///
+  /// The DB schema is inconsistent: tables created by the Flutter migrations
+  /// use `tenant_id`, while tables created by the NestJS backend (TypeORM)
+  /// use `church_id`. This method tries `tenant_id` first, then falls back
+  /// to `church_id`, then to no tenant filter, so both schemas work.
   static Future<List<Map<String, dynamic>>> fetchTable({
     required String tableName,
     required String churchId,
@@ -139,33 +154,49 @@ class SyncService {
     try {
       final tenantId = await resolveTenantId(churchId);
 
-      // Build query — use dynamic to avoid type mismatch between
-      // PostgrestFilterBuilder and PostgrestTransformBuilder
-      dynamic query = client.from(tableName).select(columns ?? '*');
+      final isGlobal = _globalTables.contains(tableName);
+      // Candidate tenant columns to try, in order of preference.
+      final tenantColumns =
+          isGlobal ? <String?>[null] : <String?>['tenant_id', 'church_id', null];
 
-      // Global tables don't have tenant_id
-      final isGlobal = tableName == 'tenants' ||
-          tableName == 'organizations' ||
-          tableName == 'regions' ||
-          tableName == 'districts' ||
-          tableName == 'areas';
-      if (!isGlobal) {
-        query = query.eq('tenant_id', tenantId);
+      Object? lastError;
+      for (final col in tenantColumns) {
+        try {
+          // Build query — use dynamic to avoid type mismatch between
+          // PostgrestFilterBuilder and PostgrestTransformBuilder
+          dynamic query = client.from(tableName).select(columns ?? '*');
+          if (col != null) {
+            query = query.eq(col, tenantId);
+          }
+          if (orderBy != null) {
+            query = query.order(orderBy, ascending: ascending);
+          }
+          if (limit != null) {
+            query = query.limit(limit);
+          }
+
+          final result = await query.timeout(const Duration(seconds: 10));
+
+          return (result as List)
+              .map((r) => _keysFromDb(r as Map<String, dynamic>))
+              .toList();
+        } catch (e) {
+          // Column doesn't exist (42703) or other error — try next column.
+          // Only retry on column-mismatch errors; bail on genuine failures
+          // (timeouts, network) after the first attempt to avoid long waits.
+          lastError = e;
+          final str = e.toString();
+          final isColumnError = str.contains('42703') ||
+              str.contains('does not exist') ||
+              str.contains('Could not find column') ||
+              str.contains('column') && str.contains('does not exist');
+          if (!isColumnError) break;
+        }
       }
-
-      if (orderBy != null) {
-        query = query.order(orderBy, ascending: ascending);
-      }
-
-      if (limit != null) {
-        query = query.limit(limit);
-      }
-
-      final result = await query.timeout(const Duration(seconds: 10));
-
-      return (result as List)
-          .map((r) => _keysFromDb(r as Map<String, dynamic>))
-          .toList();
+      // All attempts failed — return empty so local data still shows.
+      debugPrint('[fetchTable] $tableName exhausted tenant-column fallbacks: '
+          '$lastError');
+      return [];
     } catch (_) {
       return [];
     }
@@ -324,21 +355,46 @@ class SyncService {
       final tableName = entry.value;
 
       try {
-        // Fetch records updated since last sync, scoped to church
-        var query = client.from(tableName).select().gte('updated_at', since.toIso8601String());
+        // Determine which tenant column this table uses.
+        // The DB schema is inconsistent: migration-created tables use
+        // `tenant_id`, NestJS/TypeORM-created tables use `church_id`.
+        final isGlobal = boxKey == HiveBoxes.organization ||
+            boxKey == HiveBoxes.region ||
+            boxKey == HiveBoxes.district ||
+            boxKey == HiveBoxes.area ||
+            boxKey == HiveBoxes.church ||
+            _globalTables.contains(tableName);
+        final tenantColumns = isGlobal
+            ? <String?>[null]
+            : <String?>['tenant_id', 'church_id', null];
 
-        // Church-scoped tables (not global ones like organization, region, etc.)
-        // Use tenant_id (database column name) instead of church_id.
-        // The tenants table itself and global tables don't have tenant_id.
-        if (boxKey != HiveBoxes.organization &&
-            boxKey != HiveBoxes.region &&
-            boxKey != HiveBoxes.district &&
-            boxKey != HiveBoxes.area &&
-            boxKey != HiveBoxes.church) {
-          query = query.eq('tenant_id', tenantId);
+        List? result;
+        Object? lastError;
+        for (final col in tenantColumns) {
+          try {
+            var query = client
+                .from(tableName)
+                .select()
+                .gte('updated_at', since.toIso8601String());
+            if (col != null) {
+              query = query.eq(col, tenantId);
+            }
+            result = await query as List;
+            break;
+          } catch (e) {
+            lastError = e;
+            final str = e.toString();
+            final isColumnError = str.contains('42703') ||
+                str.contains('does not exist') ||
+                str.contains('Could not find column');
+            if (!isColumnError) break;
+          }
         }
-
-        final result = await query;
+        if (result == null) {
+          debugPrint('[pullRemoteChanges] $tableName fallback exhausted: '
+              '$lastError');
+          continue;
+        }
 
         // Merge into local encrypted storage
         if (boxKey == HiveBoxes.users) {
@@ -346,7 +402,7 @@ class SyncService {
           final existing = LocalDb.getAllUsersMap();
           final localMap = Map<String, dynamic>.from(existing);
 
-          for (final record in result as List) {
+          for (final record in result) {
             final recordMap = record as Map<String, dynamic>;
             final id = recordMap['id']?.toString();
             if (id != null) {
@@ -361,7 +417,7 @@ class SyncService {
           final existing = LocalDb.getAllBoxMapSync(boxKey);
           final localMap = Map<String, dynamic>.from(existing);
 
-          for (final record in result as List) {
+          for (final record in result) {
             final recordMap = record as Map<String, dynamic>;
             final id = recordMap['id']?.toString();
             if (id != null) {
