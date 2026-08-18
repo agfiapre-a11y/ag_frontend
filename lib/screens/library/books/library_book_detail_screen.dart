@@ -7,16 +7,95 @@ import '../../../core/constants.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/data_provider.dart';
 import '../../../services/local_db.dart';
+import '../../../models/library_book.dart';
+import '../../../services/supabase_config.dart';
+import '../../../services/sync_service.dart';
 import 'book_reader_screen.dart';
 
-class LibraryBookDetailScreen extends ConsumerWidget {
+class LibraryBookDetailScreen extends ConsumerStatefulWidget {
   final String bookId;
 
   const LibraryBookDetailScreen({super.key, required this.bookId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final book = LocalDb.getLibraryBookById(bookId);
+  ConsumerState<LibraryBookDetailScreen> createState() =>
+      _LibraryBookDetailScreenState();
+}
+
+class _LibraryBookDetailScreenState
+    extends ConsumerState<LibraryBookDetailScreen> {
+  bool _loadingContent = false;
+  String? _fetchedContent;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContentIfNeeded();
+  }
+
+  /// Fetches the book's text content from Supabase if not already cached locally.
+  /// Content is excluded from the list query for performance (some books are 4MB+).
+  Future<void> _loadContentIfNeeded() async {
+    final book = LocalDb.getLibraryBookById(widget.bookId);
+    if (book == null) return;
+    if (book.content.isNotEmpty) return; // Already have content
+
+    if (!SupabaseConfig.isConfigured) return;
+    final client = SupabaseConfig.client;
+    if (client == null) return;
+
+    setState(() => _loadingContent = true);
+
+    try {
+      final tenantId = await SyncService.resolveTenantId(book.churchId);
+      final result = await client
+          .from('library_books')
+          .select('content')
+          .eq('id', book.id)
+          .eq('tenant_id', tenantId)
+          .limit(1)
+          .timeout(const Duration(seconds: 15));
+
+      if (result.isNotEmpty) {
+        final content = (result[0] as Map<String, dynamic>)['content'] as String? ?? '';
+        if (content.isNotEmpty) {
+          // Save to local DB for offline access
+          final updated = LibraryBook(
+            id: book.id,
+            churchId: book.churchId,
+            title: book.title,
+            author: book.author,
+            category: book.category,
+            description: book.description,
+            url: book.url,
+            coverColor: book.coverColor,
+            source: book.source,
+            addedById: book.addedById,
+            content: content,
+            pageCount: book.pageCount,
+            wordCount: book.wordCount,
+            createdAt: book.createdAt,
+          );
+          await LocalDb.saveLibraryBook(updated);
+          if (mounted) {
+            setState(() {
+              _fetchedContent = content;
+              _loadingContent = false;
+            });
+          }
+          return;
+        }
+      }
+    } catch (_) {
+      // Network error — user can still download PDF
+    }
+
+    if (mounted) setState(() => _loadingContent = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final book = LocalDb.getLibraryBookById(widget.bookId);
 
     if (book == null) {
       return Scaffold(
@@ -27,6 +106,7 @@ class LibraryBookDetailScreen extends ConsumerWidget {
 
     final user = ref.watch(appStateProvider).user!;
     final canManage = AppRoles.canManageBook(user.role, user.id, book.addedById);
+    final effectiveContent = _fetchedContent ?? book.content;
 
     return Scaffold(
       appBar: AppBar(
@@ -37,11 +117,11 @@ class LibraryBookDetailScreen extends ConsumerWidget {
               icon: const Icon(Icons.more_vert, color: Colors.white),
               onSelected: (action) async {
                 if (action == 'edit') {
-                  context.push('/library/books/edit/$bookId');
+                  context.push('/library/books/edit/${widget.bookId}');
                 } else if (action == 'delete') {
                   final ok = await _confirmDelete(context, book.title);
                   if (ok && context.mounted) {
-                    await ref.read(libraryBookProvider.notifier).delete(bookId);
+                    await ref.read(libraryBookProvider.notifier).delete(widget.bookId);
                     if (context.mounted) context.pop();
                   }
                 }
@@ -146,12 +226,13 @@ class LibraryBookDetailScreen extends ConsumerWidget {
                     const SizedBox(height: 20),
                   ],
                   // Digital reader (extracted text)
-                  if (book.content.isNotEmpty) ...[
+                  if (effectiveContent.isNotEmpty) ...[
                     ElevatedButton.icon(
                       onPressed: () {
+                        final bookWithContent = book.copyWith(content: effectiveContent);
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => BookReaderScreen(book: book),
+                            builder: (_) => BookReaderScreen(book: bookWithContent),
                           ),
                         );
                       },
@@ -177,10 +258,53 @@ class LibraryBookDetailScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
+                  ] else if (_loadingContent) ...[
+                    // Content is being fetched from Supabase
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(color: Color(0xFF8B5CF6)),
+                            SizedBox(height: 12),
+                            Text('Loading book content...',
+                                style: TextStyle(fontSize: 13, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ] else if (book.pageCount > 0 || book.wordCount > 0) ...[
+                    // Content exists but couldn't be loaded — show read button that fetches on tap
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        setState(() => _loadingContent = true);
+                        await _loadContentIfNeeded();
+                      },
+                      icon: const Icon(Icons.menu_book),
+                      label: const Text('Read Book'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF8B5CF6),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle,
+                            size: 14, color: Colors.green),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${book.pageCount} pages · ${_formatWords(book.wordCount)} words',
+                          style: GoogleFonts.poppins(
+                              fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                   ],
                   // PDF download (fallback)
                   if (book.url.isNotEmpty) ...[
-                    if (book.content.isNotEmpty)
+                    if (effectiveContent.isNotEmpty)
                       OutlinedButton.icon(
                         onPressed: () => _openLink(context, book.url),
                         icon: const Icon(Icons.download, size: 18),

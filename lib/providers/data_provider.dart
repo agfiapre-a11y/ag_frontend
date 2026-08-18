@@ -877,9 +877,11 @@ class LibraryBookNotifier extends StateNotifier<List<LibraryBook>> {
       // Resolve the correct tenant_id (local church ID may differ)
       final tenantId = await SyncService.resolveTenantId(churchId);
 
+      // Fetch metadata only (exclude content — some books have 4MB+ of text)
+      // Content is fetched on-demand in the detail screen
       final result = await client
           .from('library_books')
-          .select()
+          .select('id,tenant_id,title,author,category,description,download_url,cover_color,source,added_by_id,page_count,word_count,created_at')
           .eq('tenant_id', tenantId)
           .order('title')
           .timeout(const Duration(seconds: 10));
@@ -894,6 +896,8 @@ class LibraryBookNotifier extends StateNotifier<List<LibraryBook>> {
       for (final record in result as List) {
         final map = record as Map<String, dynamic>;
         try {
+          // Preserve existing content from local DB (if any)
+          final existing = LocalDb.getLibraryBookById(map['id'] as String);
           final book = LibraryBook(
             id: map['id'] as String,
             churchId: map['tenant_id'] as String? ?? tenantId,
@@ -905,7 +909,7 @@ class LibraryBookNotifier extends StateNotifier<List<LibraryBook>> {
             coverColor: map['cover_color'] as String? ?? '',
             source: map['source'] as String? ?? '',
             addedById: map['added_by_id'] as String? ?? '',
-            content: map['content'] as String? ?? '',
+            content: existing?.content ?? '',
             pageCount: map['page_count'] as int? ?? 0,
             wordCount: map['word_count'] as int? ?? 0,
             createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ?? DateTime.now(),
