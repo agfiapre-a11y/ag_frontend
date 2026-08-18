@@ -121,12 +121,16 @@ class SyncService {
   /// Fetches all records from a Supabase table for a given tenant.
   /// Returns records with keys converted to camelCase (app format).
   /// Returns empty list if Supabase is not configured or fetch fails.
+  ///
+  /// [columns] — optional comma-separated list of columns to select
+  /// (e.g. 'id,title,tenant_id' to exclude large fields like content).
   static Future<List<Map<String, dynamic>>> fetchTable({
     required String tableName,
     required String churchId,
     String? orderBy,
     bool ascending = true,
     int? limit,
+    String? columns,
   }) async {
     if (!SupabaseConfig.isConfigured) return [];
     final client = SupabaseConfig.client;
@@ -137,7 +141,7 @@ class SyncService {
 
       // Build query — use dynamic to avoid type mismatch between
       // PostgrestFilterBuilder and PostgrestTransformBuilder
-      dynamic query = client.from(tableName).select();
+      dynamic query = client.from(tableName).select(columns ?? '*');
 
       // Global tables don't have tenant_id
       final isGlobal = tableName == 'tenants' ||

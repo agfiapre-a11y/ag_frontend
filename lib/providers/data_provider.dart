@@ -871,63 +871,48 @@ class LibraryBookNotifier extends StateNotifier<List<LibraryBook>> {
     _isLoadingFromSupabase = true;
 
     try {
-      final client = SupabaseConfig.client;
-      if (client == null) return;
-
-      // Resolve the correct tenant_id (local church ID may differ)
-      final tenantId = await SyncService.resolveTenantId(churchId);
-
-      // Fetch metadata only (exclude content — some books have 4MB+ of text)
+      // Use SyncService.fetchTable — same pattern as SundaySchoolBookNotifier
+      // Exclude 'content' column (some books have 4MB+ of text — would timeout)
       // Content is fetched on-demand in the detail screen
-      final result = await client
-          .from('library_books')
-          .select('id,tenant_id,title,author,category,description,download_url,cover_color,source,added_by_id,page_count,word_count,created_at')
-          .eq('tenant_id', tenantId)
-          .order('title')
-          .timeout(const Duration(seconds: 10));
+      final records = await SyncService.fetchTable(
+        tableName: 'library_books',
+        churchId: churchId,
+        orderBy: 'title',
+        // Only select columns that exist in the DB — exclude 'content' (4MB+ per book)
+        // DB columns: id,tenant_id,title,author,description,cover_url,download_url,
+        //             category,book_type,created_at,updated_at,content,page_count,word_count
+        // Note: cover_color, source, added_by_id do NOT exist in the DB
+        // fromMap handles missing fields with defaults
+        columns: 'id,tenant_id,title,author,description,cover_url,download_url,category,book_type,created_at,updated_at,page_count,word_count',
+      );
 
-      if (result.isEmpty) {
+      if (records.isEmpty) {
         _isLoadingFromSupabase = false;
         return;
       }
 
-      // Convert Supabase records to LibraryBook objects
-      final books = <LibraryBook>[];
-      for (final record in result as List) {
-        final map = record as Map<String, dynamic>;
+      for (final record in records) {
         try {
+          // fetchTable converts keys to camelCase (tenant_id → churchId, download_url → url, etc.)
+          // LibraryBook.fromMap expects camelCase keys
           // Preserve existing content from local DB (if any)
-          final existing = LocalDb.getLibraryBookById(map['id'] as String);
-          final book = LibraryBook(
-            id: map['id'] as String,
-            churchId: map['tenant_id'] as String? ?? tenantId,
-            title: map['title'] as String? ?? '',
-            author: map['author'] as String? ?? '',
-            category: map['category'] as String? ?? LibraryBookCategory.other,
-            description: map['description'] as String? ?? '',
-            url: map['download_url'] as String? ?? map['url'] as String? ?? '',
-            coverColor: map['cover_color'] as String? ?? '',
-            source: map['source'] as String? ?? '',
-            addedById: map['added_by_id'] as String? ?? '',
-            content: existing?.content ?? '',
-            pageCount: map['page_count'] as int? ?? 0,
-            wordCount: map['word_count'] as int? ?? 0,
-            createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ?? DateTime.now(),
-          );
-          books.add(book);
-
-          // Save to local DB so it's available offline next time
+          final existing = LocalDb.getLibraryBookById(record['id'] as String);
+          if (existing != null && existing.content.isNotEmpty) {
+            record['content'] = existing.content;
+          } else {
+            record['content'] = '';
+          }
+          final book = LibraryBook.fromMap(record);
           await LocalDb.saveLibraryBook(book);
         } catch (_) {
           // Skip malformed records
         }
       }
 
-      if (books.isNotEmpty && mounted) {
-        // Update state with fresh data from Supabase
+      if (mounted) {
         state = crossChurch
             ? LocalDb.getAllLibraryBooksAcrossChurches()
-            : books;
+            : LocalDb.getAllLibraryBooks(churchId: churchId);
       }
     } catch (_) {
       // Network error or table doesn't exist — local data is still shown
