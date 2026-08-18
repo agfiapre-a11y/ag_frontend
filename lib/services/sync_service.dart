@@ -114,6 +114,59 @@ class SyncService {
     return map.map((k, v) => MapEntry(_toCamelCase(k), v));
   }
 
+  /// Public version of _keysFromDb for use by providers.
+  static Map<String, dynamic> keysFromDb(Map<String, dynamic> map) =>
+      _keysFromDb(map);
+
+  /// Fetches all records from a Supabase table for a given tenant.
+  /// Returns records with keys converted to camelCase (app format).
+  /// Returns empty list if Supabase is not configured or fetch fails.
+  static Future<List<Map<String, dynamic>>> fetchTable({
+    required String tableName,
+    required String churchId,
+    String? orderBy,
+    bool ascending = true,
+    int? limit,
+  }) async {
+    if (!SupabaseConfig.isConfigured) return [];
+    final client = SupabaseConfig.client;
+    if (client == null) return [];
+
+    try {
+      final tenantId = await resolveTenantId(churchId);
+
+      // Build query — use dynamic to avoid type mismatch between
+      // PostgrestFilterBuilder and PostgrestTransformBuilder
+      dynamic query = client.from(tableName).select();
+
+      // Global tables don't have tenant_id
+      final isGlobal = tableName == 'tenants' ||
+          tableName == 'organizations' ||
+          tableName == 'regions' ||
+          tableName == 'districts' ||
+          tableName == 'areas';
+      if (!isGlobal) {
+        query = query.eq('tenant_id', tenantId);
+      }
+
+      if (orderBy != null) {
+        query = query.order(orderBy, ascending: ascending);
+      }
+
+      if (limit != null) {
+        query = query.limit(limit);
+      }
+
+      final result = await query.timeout(const Duration(seconds: 10));
+
+      return (result as List)
+          .map((r) => _keysFromDb(r as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   // ── Queue Management ──────────────────────────────────────────────────────
 
   /// Records a local change to the sync queue for later push to cloud.

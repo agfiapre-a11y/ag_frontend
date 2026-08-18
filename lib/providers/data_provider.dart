@@ -164,18 +164,60 @@ class DepartmentNotifier extends StateNotifier<List<Department>> {
   final String churchId;
   final String? branchFilter;
   final bool crossChurch;
+  bool _isLoadingFromSupabase = false;
 
   DepartmentNotifier(this.churchId, this.branchFilter, {this.crossChurch = false}) : super([]) {
     _load();
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = crossChurch
         ? LocalDb.getAllDepartmentsAcrossChurches()
         : LocalDb.getAllDepartments(
             churchId: churchId,
             branchId: branchFilter,
           );
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'departments',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = Department.fromMap(record);
+          await LocalDb.saveDepartment(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        state = crossChurch
+            ? LocalDb.getAllDepartmentsAcrossChurches()
+            : LocalDb.getAllDepartments(
+                churchId: churchId,
+                branchId: branchFilter,
+              );
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> add({
@@ -228,6 +270,7 @@ class MemberNotifier extends StateNotifier<List<Member>> {
   final String? districtId;
   final String? areaId;
   final bool crossChurch;
+  bool _isLoadingFromSupabase = false;
 
   MemberNotifier(
     this.churchId, {
@@ -243,6 +286,7 @@ class MemberNotifier extends StateNotifier<List<Member>> {
   }
 
   void _load() {
+    // 1. Show local data immediately
     final list = crossChurch
         ? LocalDb.getAllMembersAcrossChurches(
             branchId: branchFilter,
@@ -263,6 +307,60 @@ class MemberNotifier extends StateNotifier<List<Member>> {
           );
     list.sort((a, b) => a.name.compareTo(b.name));
     state = list;
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'members',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = Member.fromMap(record);
+          await LocalDb.saveMember(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        final list = crossChurch
+            ? LocalDb.getAllMembersAcrossChurches(
+                branchId: branchFilter,
+                departmentId: departmentFilter,
+                organizationId: organizationId,
+                regionId: regionId,
+                districtId: districtId,
+                areaId: areaId,
+              )
+            : LocalDb.getAllMembers(
+                churchId: churchId,
+                branchId: branchFilter,
+                departmentId: departmentFilter,
+                organizationId: organizationId,
+                regionId: regionId,
+                districtId: districtId,
+                areaId: areaId,
+              );
+        list.sort((a, b) => a.name.compareTo(b.name));
+        state = list;
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> add({
@@ -580,18 +678,60 @@ class FinanceNotifier extends StateNotifier<List<FinanceTransaction>> {
   final String churchId;
   final String? branchFilter;
   final bool crossChurch;
+  bool _isLoadingFromSupabase = false;
 
   FinanceNotifier(this.churchId, this.branchFilter, {this.crossChurch = false}) : super([]) {
     _load();
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = crossChurch
         ? LocalDb.getAllTransactionsAcrossChurches()
         : LocalDb.getAllTransactions(
             churchId: churchId,
             branchId: branchFilter,
           );
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'transactions',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = FinanceTransaction.fromMap(record);
+          await LocalDb.saveTransaction(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        state = crossChurch
+            ? LocalDb.getAllTransactionsAcrossChurches()
+            : LocalDb.getAllTransactions(
+                churchId: churchId,
+                branchId: branchFilter,
+              );
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> add(FinanceTransaction tx) async {
@@ -627,18 +767,60 @@ class SermonNotifier extends StateNotifier<List<Sermon>> {
   final String churchId;
   final String? branchFilter;
   final bool crossChurch;
+  bool _isLoadingFromSupabase = false;
 
   SermonNotifier(this.churchId, this.branchFilter, {this.crossChurch = false}) : super([]) {
     _load();
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = crossChurch
         ? LocalDb.getAllSermonsAcrossChurches()
         : LocalDb.getAllSermons(
             churchId: churchId,
             branchId: branchFilter,
           );
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'sermons',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = Sermon.fromMap(record);
+          await LocalDb.saveSermon(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        state = crossChurch
+            ? LocalDb.getAllSermonsAcrossChurches()
+            : LocalDb.getAllSermons(
+                churchId: churchId,
+                branchId: branchFilter,
+              );
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> save(Sermon sermon) async {
@@ -777,6 +959,7 @@ final libraryBookProvider =
 class DevotionGuideNotifier extends StateNotifier<List<DevotionGuide>> {
   final String churchId;
   final bool crossChurch;
+  bool _isLoadingFromSupabase = false;
 
   DevotionGuideNotifier(this.churchId, {this.crossChurch = false})
       : super([]) {
@@ -784,9 +967,47 @@ class DevotionGuideNotifier extends StateNotifier<List<DevotionGuide>> {
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = crossChurch
         ? LocalDb.getAllDevotionGuidesAcrossChurches()
         : LocalDb.getAllDevotionGuides(churchId: churchId);
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'devotion_guides',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = DevotionGuide.fromMap(record);
+          await LocalDb.saveDevotionGuide(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        state = crossChurch
+            ? LocalDb.getAllDevotionGuidesAcrossChurches()
+            : LocalDb.getAllDevotionGuides(churchId: churchId);
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> save(DevotionGuide devotion) async {
@@ -856,6 +1077,7 @@ final bibleStudyResourceProvider = StateNotifierProvider<
 class SundaySchoolBookNotifier extends StateNotifier<List<SundaySchoolBook>> {
   final String churchId;
   final bool crossChurch;
+  bool _isLoadingFromSupabase = false;
 
   SundaySchoolBookNotifier(this.churchId, {this.crossChurch = false})
       : super([]) {
@@ -863,9 +1085,47 @@ class SundaySchoolBookNotifier extends StateNotifier<List<SundaySchoolBook>> {
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = crossChurch
         ? LocalDb.getAllSundaySchoolBooksAcrossChurches()
         : LocalDb.getAllSundaySchoolBooks(churchId: churchId);
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'sunday_school_books',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = SundaySchoolBook.fromMap(record);
+          await LocalDb.saveSundaySchoolBook(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        state = crossChurch
+            ? LocalDb.getAllSundaySchoolBooksAcrossChurches()
+            : LocalDb.getAllSundaySchoolBooks(churchId: churchId);
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> save(SundaySchoolBook book) async {
@@ -950,6 +1210,7 @@ final sundaySchoolChaptersForBookProvider = StateNotifierProvider.family<
 class CommunityPostNotifier extends StateNotifier<List<CommunityPost>> {
   final String churchId;
   final bool crossChurch;
+  bool _isLoadingFromSupabase = false;
 
   CommunityPostNotifier(this.churchId, {this.crossChurch = false})
       : super([]) {
@@ -957,9 +1218,47 @@ class CommunityPostNotifier extends StateNotifier<List<CommunityPost>> {
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = crossChurch
         ? LocalDb.getAllCommunityPostsAcrossChurches()
         : LocalDb.getAllCommunityPosts(churchId: churchId);
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'community_posts',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = CommunityPost.fromMap(record);
+          await LocalDb.saveCommunityPost(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        state = crossChurch
+            ? LocalDb.getAllCommunityPostsAcrossChurches()
+            : LocalDb.getAllCommunityPosts(churchId: churchId);
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<CommunityPost> createPost({
@@ -1211,6 +1510,7 @@ class EventNotifier extends StateNotifier<List<ChurchEvent>> {
   final String? departmentFilter;
   final bool crossChurch;
   final String? ministryTypeFilter;
+  bool _isLoadingFromSupabase = false;
 
   /// Audience filtering: user's roles + ministry type, used to filter
   /// events by their `audience` field. Null = no audience filtering.
@@ -1229,6 +1529,7 @@ class EventNotifier extends StateNotifier<List<ChurchEvent>> {
   }
 
   void _load() {
+    // 1. Show local data immediately
     var events = crossChurch
         ? LocalDb.getAllEventsAcrossChurches()
         : LocalDb.getAllEvents(
@@ -1250,6 +1551,58 @@ class EventNotifier extends StateNotifier<List<ChurchEvent>> {
     }
 
     state = events;
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'events',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = ChurchEvent.fromMap(record);
+          await LocalDb.saveEvent(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        var events = crossChurch
+            ? LocalDb.getAllEventsAcrossChurches()
+            : LocalDb.getAllEvents(
+                churchId: churchId,
+                branchId: branchFilter,
+                departmentId: departmentFilter,
+                ministryType: ministryTypeFilter,
+              );
+        if (_userRoles != null) {
+          events = events
+              .where((e) => EventAudience.canView(
+                    e.audience,
+                    userRoles: _userRoles!,
+                    userMinistryType: _userMinistryType,
+                  ))
+              .toList();
+        }
+        state = events;
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> save(ChurchEvent event) async {
@@ -1602,6 +1955,7 @@ class WelfareNotifier extends StateNotifier<List<WelfareCase>> {
   final String churchId;
   final String? branchFilter;
   final String? statusFilter;
+  bool _isLoadingFromSupabase = false;
 
   WelfareNotifier(
     this.churchId, {
@@ -1612,11 +1966,51 @@ class WelfareNotifier extends StateNotifier<List<WelfareCase>> {
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = LocalDb.getAllWelfareCases(
       churchId: churchId,
       branchId: branchFilter,
       status: statusFilter,
     );
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'welfare_cases',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = WelfareCase.fromMap(record);
+          await LocalDb.saveWelfareCase(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        state = LocalDb.getAllWelfareCases(
+          churchId: churchId,
+          branchId: branchFilter,
+          status: statusFilter,
+        );
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> add(WelfareCase welfareCase) async {
@@ -1948,6 +2342,7 @@ class MinistryNotifier extends StateNotifier<List<Ministry>> {
   final String? branchFilter;
   final String? typeFilter;
   final String? orgId, regId, distId, arId;
+  bool _isLoadingFromSupabase = false;
 
   MinistryNotifier(
     this.churchId, {
@@ -1962,6 +2357,7 @@ class MinistryNotifier extends StateNotifier<List<Ministry>> {
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = LocalDb.getAllMinistries(
       churchId: churchId,
       branchId: branchFilter,
@@ -1971,6 +2367,49 @@ class MinistryNotifier extends StateNotifier<List<Ministry>> {
       districtId: distId,
       areaId: arId,
     );
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'ministries',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = Ministry.fromMap(record);
+          await LocalDb.saveMinistry(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        state = LocalDb.getAllMinistries(
+          churchId: churchId,
+          branchId: branchFilter,
+          ministryType: typeFilter,
+          organizationId: orgId,
+          regionId: regId,
+          districtId: distId,
+          areaId: arId,
+        );
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> add(Ministry ministry) async {
@@ -2301,6 +2740,7 @@ class ContributionNotifier extends StateNotifier<List<MemberContribution>> {
   final String churchId;
   final String? branchFilter;
   final String? memberIdFilter;
+  bool _isLoadingFromSupabase = false;
 
   ContributionNotifier(this.churchId, this.branchFilter, this.memberIdFilter)
       : super([]) {
@@ -2308,11 +2748,51 @@ class ContributionNotifier extends StateNotifier<List<MemberContribution>> {
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = LocalDb.getAllContributions(
       churchId: churchId,
       branchId: branchFilter,
       memberId: memberIdFilter,
     );
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'contributions',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = MemberContribution.fromMap(record);
+          await LocalDb.saveContribution(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        state = LocalDb.getAllContributions(
+          churchId: churchId,
+          branchId: branchFilter,
+          memberId: memberIdFilter,
+        );
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> add(MemberContribution c) async {
@@ -2404,13 +2884,50 @@ final myBenefitRequestProvider =
 class BudgetNotifier extends StateNotifier<List<Budget>> {
   final String churchId;
   final String? branchFilter;
+  bool _isLoadingFromSupabase = false;
 
   BudgetNotifier(this.churchId, this.branchFilter) : super([]) {
     _load();
   }
 
   void _load() {
+    // 1. Show local data immediately
     state = LocalDb.getAllBudgets(churchId: churchId, branchId: branchFilter);
+
+    // 2. Fetch from Supabase in the background
+    _loadFromSupabase();
+  }
+
+  Future<void> _loadFromSupabase() async {
+    if (!SupabaseConfig.isConfigured || _isLoadingFromSupabase) return;
+    _isLoadingFromSupabase = true;
+
+    try {
+      final records = await SyncService.fetchTable(
+        tableName: 'budgets',
+        churchId: churchId,
+      );
+
+      if (records.isEmpty) {
+        _isLoadingFromSupabase = false;
+        return;
+      }
+
+      for (final record in records) {
+        try {
+          final item = Budget.fromMap(record);
+          await LocalDb.saveBudget(item);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        state = LocalDb.getAllBudgets(churchId: churchId, branchId: branchFilter);
+      }
+    } catch (_) {
+      // Network error — local data is still shown
+    } finally {
+      _isLoadingFromSupabase = false;
+    }
   }
 
   Future<void> add(Budget b) async {
