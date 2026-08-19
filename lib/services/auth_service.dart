@@ -127,8 +127,12 @@ class AuthService {
 
     if (ApiConfig.isConfigured) {
       try {
+        // Timeout matches ApiClient.authTimeout — long enough to survive a
+        // Render free-tier cold start (30-60+ seconds after inactivity)
+        // instead of silently falling back to local-only login before the
+        // backend has even finished waking up.
         final result = await RemoteAuthService.login(email, password)
-            .timeout(const Duration(seconds: 15));
+            .timeout(ApiClient.authTimeout);
         if (result == null) {
           await RateLimiter.recordFailure(email);
           return null;
