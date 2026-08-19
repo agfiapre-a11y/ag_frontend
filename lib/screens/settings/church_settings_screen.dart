@@ -142,6 +142,9 @@ class _ChurchSettingsScreenState extends ConsumerState<ChurchSettingsScreen> {
       // Clear all SharedPreferences
       await LocalDb.prefs.clear();
 
+      // Block backend calls during re-seeding
+      AuthService.isSeeding = true;
+
       // Re-seed from scratch
       final churches = LocalDb.getAllChurches();
       if (churches.isEmpty) {
@@ -184,6 +187,7 @@ class _ChurchSettingsScreenState extends ConsumerState<ChurchSettingsScreen> {
         ));
       }
     } finally {
+      AuthService.isSeeding = false;
       if (mounted) setState(() => _saving = false);
     }
   }

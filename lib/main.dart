@@ -5,6 +5,8 @@ import 'core/dynamic_theme.dart';
 import 'core/web_url_strategy_stub.dart'
     if (dart.library.html) 'core/web_url_strategy.dart' as web_url;
 import 'services/local_db.dart';
+import 'services/api_client.dart';
+import 'services/auth_service.dart';
 import 'services/access_control_service.dart';
 import 'services/supabase_config.dart';
 import 'services/seed_data_service.dart';
@@ -54,9 +56,24 @@ Future<void> main() async {
     await AccessControlService.init();
     await SupabaseConfig.initialize();
 
+    // Always clean up stale locally-seeded churches that conflict with
+    // real Supabase tenants. Runs on every startup, regardless of
+    // has_seeded, so old seed data from previous app versions is removed.
+    await SeedMultiChurch.cleanupStaleChurches();
+
     final hasSeeded = LocalDb.prefs.getBool('has_seeded') ?? false;
 
     if (!hasSeeded) {
+      // Clear any stale auth token before seeding so that registerUser()
+      // doesn't attempt an authenticated backend call (/auth/onboard-user)
+      // during the seed. Seeding is local-only; the sync service will push
+      // to Supabase later once the user logs in.
+      ApiClient().clearAuth();
+      // Block registerUser() from calling the backend during seeding.
+      // This is a hard block that prevents the /auth/onboard-user call
+      // entirely, regardless of whether a stale token exists.
+      AuthService.isSeeding = true;
+
       try {
         final churches = LocalDb.getAllChurches();
         if (churches.isEmpty) {
@@ -84,6 +101,9 @@ Future<void> main() async {
         await LocalDb.prefs.setBool('has_seeded', true);
       } catch (e, st) {
         debugPrint('SEED ERROR: $e\n$st');
+      } finally {
+        // Re-enable backend calls for normal app operation
+        AuthService.isSeeding = false;
       }
     }
 

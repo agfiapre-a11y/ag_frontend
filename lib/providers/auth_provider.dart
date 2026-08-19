@@ -6,6 +6,8 @@ import '../models/tenant_config.dart';
 import '../services/auth_service.dart';
 import '../services/local_db.dart';
 import '../services/sync_service.dart';
+import '../services/library_seed_data.dart';
+import '../models/sync_queue_entry.dart';
 import '../services/tenant_context.dart';
 import '../services/rate_limiter.dart';
 import '../services/api_config.dart';
@@ -86,9 +88,28 @@ class AppStateNotifier extends StateNotifier<AppState> {
             tenantConfig: tenantConfig,
           );
 
-          // Fetch users and members from API on auto-login too
+          // ONLINE-FIRST: Seed library data locally if not already seeded
+          // (books, devotions, Bible studies). Runs on auto-login in case
+          // the library seed was skipped during initial startup because
+          // no local church existed yet.
+          if (user.churchId.isNotEmpty &&
+              LocalDb.getAllLibraryBooks(churchId: user.churchId).isEmpty) {
+            LibrarySeedData.seedForChurch(user.churchId).catchError((_) {});
+          }
+
+          // ONLINE-FIRST: Fetch users and members from API on auto-login too,
+          // and trigger a full Supabase sync to get fresh data.
           if (ApiConfig.isConfigured && user.churchId.isNotEmpty) {
             _fetchUsersAndMembersFromApi(user.churchId).catchError((_) {});
+          }
+          // Also trigger a full Supabase pull on auto-login if online
+          if (SyncService.isConfigured && user.churchId.isNotEmpty) {
+            SyncService.fullSync(churchId: user.churchId).catchError(
+              (_) => const SyncResult(
+                success: false, pushed: 0, pulled: 0, failed: 0,
+                message: 'Auto-login sync failed',
+              ),
+            );
           }
           return;
         }
@@ -121,13 +142,36 @@ class AppStateNotifier extends StateNotifier<AppState> {
           user: result.user,
           church: result.church,
           tenantConfig: result.tenantConfig);
-      // Pull remote data so the admin sees all records immediately after login.
-      // This fetches from both the NestJS API and Supabase.
+
+      // ONLINE-FIRST: After successful login, immediately pull all data from
+      // Supabase + backend API so the user sees fresh data right away.
+      // This runs synchronously before returning so the dashboard is populated.
+      // If it fails (offline/timeout), the app falls back to local data.
       if (result.church != null) {
+        // ONLINE-FIRST: Seed library data locally if not already seeded
+        // (books, devotions, Bible studies). This runs after login so
+        // the church exists locally. The Supabase sync will also pull
+        // any books that exist in the cloud.
+        try {
+          if (LocalDb.getAllLibraryBooks(churchId: result.church!.id).isEmpty) {
+            await LibrarySeedData.seedForChurch(result.church!.id);
+          }
+        } catch (_) {
+          // Library seed failure shouldn't block login
+        }
+
         try {
           await _fetchUsersAndMembersFromApi(result.church!.id);
         } catch (_) {
-          // Fetch failure shouldn't block login
+          // Fetch failure shouldn't block login — local data is used as fallback
+        }
+        // Trigger a full Supabase sync (pull first, then push)
+        if (SyncService.isConfigured) {
+          try {
+            await SyncService.fullSync(churchId: result.church!.id);
+          } catch (_) {
+            // Sync failure shouldn't block login
+          }
         }
       }
       return null;

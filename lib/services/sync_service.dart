@@ -27,7 +27,6 @@ class SyncService {
   static const _tableMap = {
     HiveBoxes.church: 'tenants',
     HiveBoxes.users: 'users',
-    HiveBoxes.branches: 'branches',
     HiveBoxes.departments: 'departments',
     HiveBoxes.members: 'members',
     HiveBoxes.attendance: 'attendance_records',
@@ -150,6 +149,71 @@ class SyncService {
     'areas',
   };
 
+  /// Column whitelist per table — lists the actual columns that exist in
+  /// the Supabase database (NestJS/TypeORM schema). Payloads are filtered
+  /// to only include these columns before upsert, preventing 400 errors
+  /// from extra columns the Flutter model has but the DB table doesn't.
+  ///
+  /// Tables not listed here are not filtered (legacy behaviour).
+  static const _tableColumns = <String, Set<String>>{
+    'users': {
+      'id', 'email', 'password_hash', 'name', 'role', 'roles',
+      'active_role', 'tenant_id', 'is_active', 'created_at', 'updated_at',
+    },
+    'members': {
+      'id', 'tenant_id', 'first_name', 'last_name', 'email', 'phone',
+      'gender', 'date_of_birth', 'marital_status', 'is_employed',
+      'address', 'city', 'is_active', 'created_at', 'updated_at',
+    },
+  };
+
+  /// Tables where tenant_id is NOT NULL with FK to tenants.id.
+  /// If the tenant doesn't exist in the Supabase tenants table, the
+  /// upsert is skipped to avoid FK violations.
+  static const _tenantIdTables = {
+    'members', 'attendance_records', 'transactions', 'welfare_cases',
+    'contributions', 'budgets', 'finance_approvals',
+  };
+
+  /// Tables where church_id is NOT NULL with FK to churches.id.
+  /// These tables reference the Flutter migrations' churches table,
+  /// NOT the NestJS tenants table. The church must exist in the
+  /// churches table before data can be pushed.
+  static const _churchIdTables = {
+    'departments', 'ministries', 'ministry_finance',
+    'welfare_finance',
+  };
+
+  /// Filters an upsert payload to only include columns that exist in the
+  /// target table. Also handles special field transformations:
+  /// - members: splits `name` into `first_name` + `last_name`
+  static Map<String, dynamic> _filterPayload(
+    String tableName,
+    Map<String, dynamic> payload,
+  ) {
+    final allowed = _tableColumns[tableName];
+    if (allowed == null) return payload;
+
+    final filtered = <String, dynamic>{};
+    for (final entry in payload.entries) {
+      if (allowed.contains(entry.key)) {
+        filtered[entry.key] = entry.value;
+      }
+    }
+
+    // Special case: members table uses first_name + last_name, not name.
+    if (tableName == 'members' && !filtered.containsKey('first_name')) {
+      final name = payload['name'] as String? ?? '';
+      if (name.isNotEmpty) {
+        final parts = name.trim().split(RegExp(r'\s+'));
+        filtered['first_name'] = parts.first;
+        filtered['last_name'] = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+      }
+    }
+
+    return filtered;
+  }
+
   /// Fetches all records from a Supabase table for a given tenant.
   /// Returns records with keys converted to camelCase (app format).
   /// Returns empty list if Supabase is not configured or fetch fails.
@@ -182,7 +246,9 @@ class SyncService {
           isGlobal ? <String?>[null] : <String?>['tenant_id', 'church_id', null];
 
       Object? lastError;
-      for (final col in tenantColumns) {
+      for (var i = 0; i < tenantColumns.length; i++) {
+        final col = tenantColumns[i];
+        final isLast = i == tenantColumns.length - 1;
         try {
           // Build query — use dynamic to avoid type mismatch between
           // PostgrestFilterBuilder and PostgrestTransformBuilder
@@ -198,10 +264,16 @@ class SyncService {
           }
 
           final result = await query.timeout(const Duration(seconds: 10));
-
-          return (result as List)
+          final rows = (result as List)
               .map((r) => _keysFromDb(r as Map<String, dynamic>))
               .toList();
+
+          // If we got rows, or this is the last fallback column, we're done.
+          // If we got 0 rows but more fallback columns remain, try them —
+          // the data may live under a different tenant column (e.g. rows
+          // have tenant_id NULL but church_id populated).
+          if (rows.isNotEmpty || isLast) return rows;
+          // Empty result on a non-final column: fall through to next.
         } catch (e) {
           // Column doesn't exist (42703) or other error — try next column.
           // Only retry on column-mismatch errors; bail on genuine failures
@@ -323,6 +395,55 @@ class SyncService {
           // _keysToDb maps churchId → tenant_id by default.
           final dbData = _keysToDb(syncData);
 
+          // Resolve the real Supabase tenant_id for this record's church.
+          // The Flutter app generates local UUIDs that don't match the
+          // Supabase tenants table; resolveTenantId maps by name.
+          final rawTenantId = dbData['tenant_id'] as String? ??
+              dbData['church_id'] as String?;
+          final resolvedTenantId = rawTenantId != null && rawTenantId.isNotEmpty
+              ? await resolveTenantId(rawTenantId)
+              : null;
+
+          // For tables where tenant_id is NOT NULL with a FK to tenants,
+          // skip the upsert if the tenant doesn't exist in Supabase yet.
+          // This prevents FK violations (400) during local-only seeding
+          // before the church has been created in Supabase.
+          if (_tenantIdTables.contains(tableName)) {
+            final effectiveTenantId = resolvedTenantId ?? rawTenantId;
+            if (effectiveTenantId == null || effectiveTenantId.isEmpty) {
+              debugPrint('[pushLocalChanges] Skipping $tableName/'
+                  '${entry.recordId}: no tenant_id');
+              continue;
+            }
+            if (!await _tenantExists(client, effectiveTenantId)) {
+              debugPrint('[pushLocalChanges] Skipping $tableName/'
+                  '${entry.recordId}: tenant $effectiveTenantId '
+                  'does not exist in Supabase tenants table');
+              continue;
+            }
+          }
+
+          // For tables where church_id is NOT NULL with a FK to churches,
+          // ensure the church exists in the churches table before pushing.
+          // The churches table is separate from the tenants table and is
+          // populated by Flutter migrations, not by the NestJS backend.
+          if (_churchIdTables.contains(tableName)) {
+            final effectiveChurchId = resolvedTenantId ?? rawTenantId;
+            if (effectiveChurchId == null || effectiveChurchId.isEmpty) {
+              debugPrint('[pushLocalChanges] Skipping $tableName/'
+                  '${entry.recordId}: no church_id');
+              continue;
+            }
+            // Auto-insert the church into the churches table if missing
+            await _ensureChurchExists(client, effectiveChurchId);
+          }
+
+          // Replace the raw tenant_id with the resolved one
+          if (resolvedTenantId != null && resolvedTenantId != rawTenantId) {
+            dbData['tenant_id'] = resolvedTenantId;
+            dbData.remove('church_id');
+          }
+
           // The DB schema is inconsistent: migration-created tables use
           // `tenant_id`, NestJS/TypeORM-created tables use `church_id`.
           // Try tenant_id first, then church_id, then strip the tenant
@@ -337,9 +458,12 @@ class SyncService {
           for (final col in tenantCols) {
             try {
               final payload = _buildUpsertPayload(dbData, col);
+              // Filter to only columns that exist in the target table
+              // to prevent 400 errors from extra model fields.
+              final filtered = _filterPayload(tableName, payload);
               await client
                   .from(tableName)
-                  .upsert(payload, onConflict: 'id');
+                  .upsert(filtered, onConflict: 'id');
               succeeded = true;
               break;
             } catch (e) {
@@ -376,6 +500,84 @@ class SyncService {
     }
 
     return pushed;
+  }
+
+  /// Checks whether a tenant with the given ID exists in the Supabase
+  /// tenants table. Returns false on any error (fail-safe).
+  static Future<bool> _tenantExists(dynamic client, String? tenantId) async {
+    if (tenantId == null || tenantId.isEmpty) return false;
+    try {
+      final result = await client
+          .from('tenants')
+          .select('id')
+          .eq('id', tenantId)
+          .limit(1)
+          .timeout(const Duration(seconds: 5));
+      return (result as List).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Checks whether a church with the given ID exists in the Supabase
+  /// churches table (Flutter migrations schema). Returns false on any
+  /// error (fail-safe).
+  static Future<bool> _churchExists(dynamic client, String? churchId) async {
+    if (churchId == null || churchId.isEmpty) return false;
+    try {
+      final result = await client
+          .from('churches')
+          .select('id')
+          .eq('id', churchId)
+          .limit(1)
+          .timeout(const Duration(seconds: 5));
+      return (result as List).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Ensures the church exists in the Supabase churches table (Flutter
+  /// migrations schema). This is needed because branches, departments,
+  /// ministries, etc. have FK to churches(id), but the sync service
+  /// only syncs churches to the tenants table (NestJS schema).
+  /// Inserts a minimal church record if it doesn't already exist.
+  static Future<void> _ensureChurchExists(
+    dynamic client,
+    String churchId,
+  ) async {
+    if (await _churchExists(client, churchId)) return;
+
+    // Look up the church from local storage to get its details
+    final church = LocalDb.getChurchById(churchId);
+    final now = DateTime.now().toIso8601String();
+
+    try {
+      await client.from('churches').upsert({
+        'id': churchId,
+        'name': church?.name ?? 'Unknown Church',
+        'email': church?.email,
+        'phone': church?.phone,
+        'address': church?.address,
+        'description': '',
+        'logo_url': '',
+        'created_at': now,
+        'updated_at': now,
+      }, onConflict: 'id');
+      debugPrint('[sync] Inserted church $churchId into churches table');
+    } catch (e) {
+      debugPrint('[sync] Failed to insert church into churches table: $e');
+    }
+  }
+
+  /// Public wrapper for _ensureChurchExists — called after login to
+  /// make sure the church exists in the Supabase churches table before
+  /// any tenant-scoped data is synced.
+  static Future<void> ensureChurchInSupabase(String churchId) async {
+    if (!SupabaseConfig.isConfigured) return;
+    final client = SupabaseConfig.client;
+    if (client == null) return;
+    await _ensureChurchExists(client, churchId);
   }
 
   // ── Pull (cloud → local) ──────────────────────────────────────────────────
@@ -466,7 +668,9 @@ class SyncService {
 
         List? result;
         Object? lastError;
-        for (final col in tenantColumns) {
+        for (var i = 0; i < tenantColumns.length; i++) {
+          final col = tenantColumns[i];
+          final isLast = i == tenantColumns.length - 1;
           try {
             var query = client
                 .from(tableName)
@@ -475,8 +679,15 @@ class SyncService {
             if (col != null) {
               query = query.eq(col, tenantId);
             }
-            result = await query as List;
-            break;
+            final fetched = await query as List;
+            // If we got rows, or this is the last fallback column, accept it.
+            // If empty but more fallbacks remain, try them — data may live
+            // under a different tenant column (e.g. tenant_id NULL but
+            // church_id populated on legacy rows).
+            if (fetched.isNotEmpty || isLast) {
+              result = fetched;
+              break;
+            }
           } catch (e) {
             lastError = e;
             final str = e.toString();
@@ -559,11 +770,14 @@ class SyncService {
     }
 
     try {
-      // Push first
-      final pushed = await pushLocalChanges();
-
-      // Then pull
+      // ONLINE-FIRST: Pull first, then push.
+      // This ensures the app has the latest data from Supabase before
+      // pushing local changes, reducing conflicts and ensuring the user
+      // sees fresh data immediately after login.
       final pulled = await pullRemoteChanges(churchId: churchId);
+
+      // Then push local changes
+      final pushed = await pushLocalChanges();
 
       // Update last sync time
       await LocalDb.setLastSyncTime(DateTime.now());

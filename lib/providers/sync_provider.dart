@@ -37,16 +37,19 @@ class SyncNotifier extends StateNotifier<SyncState> {
       }
     });
 
-    // Always-on auto-sync: every 30 seconds when configured
+    // Always-on auto-sync: every 15 seconds when configured.
+    // ONLINE-FIRST: Frequent sync ensures data stays fresh and local
+    // changes are pushed to Supabase quickly.
     if (SyncService.isConfigured && churchId.isNotEmpty) {
       _autoSyncTimer?.cancel();
-      _autoSyncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _autoSyncTimer = Timer.periodic(const Duration(seconds: 15), (_) {
         if (!_disposed && state.status != SyncStatus.syncing) {
           sync();
         }
       });
-      // Also do an initial sync shortly after startup
-      Timer(const Duration(seconds: 2), () {
+      // ONLINE-FIRST: Sync immediately on startup (1 second delay to allow
+      // providers to initialize)
+      Timer(const Duration(seconds: 1), () {
         if (!_disposed && state.status != SyncStatus.syncing) {
           sync();
         }

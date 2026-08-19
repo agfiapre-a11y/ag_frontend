@@ -24,6 +24,12 @@ import '../core/role_dashboard_catalog.dart';
 class AuthService {
   static const _uuid = Uuid();
 
+  /// When true, registerUser() skips the backend /auth/onboard-user call
+  /// entirely. Set to true during local seeding so seed-created users
+  /// don't trigger authenticated API calls (which always fail with 401
+  /// during seeding because no user is logged in).
+  static bool isSeeding = false;
+
   static String hashPassword(String password) {
     return SecurityService.hashPassword(password);
   }
@@ -117,15 +123,26 @@ class AuthService {
   }
 
   // Login with email + password.
-  // Uses the NestJS backend when API_BASE_URL is configured, otherwise local DB.
-  // Falls back to local login if the backend is unreachable (timeout/network error).
+  // ONLINE-FIRST: Uses the NestJS backend when API_BASE_URL is configured
+  // and internet is available. Falls back to local login only when the
+  // backend is unreachable (no internet, timeout, or network error).
+  // The sync service continues running in the background to keep data
+  // in sync with Supabase whenever internet is available.
   static Future<({AppUser user, Church? church, TenantConfig? tenantConfig})?> login(
       String email, String password) async {
     if (await RateLimiter.isLocked(email)) {
       return null;
     }
 
+    // ONLINE-FIRST: Check internet first. If offline, skip backend attempt
+    // and go straight to local login (no waiting for timeout).
     if (ApiConfig.isConfigured) {
+      final online = await SyncService.isOnline();
+      if (!online) {
+        // No internet — fall back to local login immediately
+        return _loginLocal(email, password);
+      }
+
       try {
         // Timeout matches ApiClient.authTimeout — long enough to survive a
         // Render free-tier cold start (30-60+ seconds after inactivity)
@@ -365,6 +382,21 @@ class AuthService {
       refreshToken: refreshToken,
       tenantId: user.churchId,
     );
+
+    // Ensure the church exists in the Supabase churches table (Flutter
+    // migrations schema). branches, departments, ministries, etc. have
+    // FK to churches(id), so the church must exist before any of those
+    // tables can be synced. The tenants table (NestJS schema) is already
+    // populated by the backend, but the churches table is separate.
+    if (SupabaseConfig.isConfigured) {
+      try {
+        await SyncService.ensureChurchInSupabase(church.id);
+      } catch (e) {
+        debugPrint('[_persistRemoteSession] Failed to ensure church in '
+            'Supabase: $e');
+      }
+    }
+
     await AuditService.log(
       actorId: user.id,
       actorName: user.name,
@@ -471,11 +503,17 @@ class AuthService {
       }
     }
 
-    // Register on backend when API is configured (best-effort).
-    // If the backend is unreachable or the JWT is missing/expired (401),
-    // we still save the user locally and enqueue a sync so the app
-    // remains functional offline. The sync service will push to Supabase.
-    if (ApiConfig.isConfigured && churchId.isNotEmpty) {
+    // Register on backend when API is configured AND we have a valid JWT
+    // AND we're not in seeding mode (best-effort). The /auth/onboard-user
+    // endpoint requires authentication (@Roles super_system_admin /
+    // local_church_admin), so calling it during seeding (when no user is
+    // logged in) always returns 401. The isSeeding flag is a hard block
+    // that prevents the call entirely during seeding, regardless of
+    // whether a stale token exists in secure storage.
+    if (ApiConfig.isConfigured &&
+        churchId.isNotEmpty &&
+        ApiClient().hasToken &&
+        !isSeeding) {
       try {
         await RemoteAuthService.registerUser(
           name: name,
