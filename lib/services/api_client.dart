@@ -45,6 +45,10 @@ class ApiClient {
     _tenantId = null;
   }
 
+  /// Returns true if an access token is currently set (user is authenticated).
+  /// Used to skip authenticated backend calls during seeding or offline mode.
+  bool get hasToken => _token != null && _token!.isNotEmpty;
+
   Future<Map<String, dynamic>> request(
     String method,
     String path, {

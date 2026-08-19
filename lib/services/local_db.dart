@@ -105,6 +105,49 @@ class LocalDb {
     await _loadAllBoxCaches();
   }
 
+  /// Deletes a church and ALL its tenant-scoped data (users, branches,
+  /// departments, members, finance, sermons, events, attendance, welfare,
+  /// hierarchy, library, etc.). Also removes the church from the churches
+  /// map. The active church is switched to [fallbackChurchId] if provided,
+  /// otherwise to the first remaining church.
+  static Future<void> deleteChurchData(
+    String churchId, {
+    String? fallbackChurchId,
+  }) async {
+    // Switch to the church being deleted so we can clear its scoped data
+    TenantContext.setActiveChurch(churchId);
+
+    // Clear all encrypted boxes for this tenant
+    for (final boxKey in _encryptedBoxes) {
+      final key = TenantContext.tenantKey(boxKey);
+      await SecureStorageWrapper.removeSecureMap(key);
+      // Also remove old unencrypted format if present
+      await prefs.remove(key);
+      _boxCache.remove(boxKey);
+    }
+    // Clear users for this tenant
+    final usersKey = TenantContext.tenantKey(HiveBoxes.users);
+    await SecureStorageWrapper.removeSecureMap(usersKey);
+    await prefs.remove(usersKey);
+    _usersCache = '';
+
+    // Remove the church from the churches map
+    final map = _getAllChurchesMap();
+    map.remove(churchId);
+    await prefs.setString(_churchesKey, jsonEncode(map));
+
+    // Switch active church to fallback or first remaining church
+    final remaining = getAllChurches();
+    final newActive = fallbackChurchId ??
+        (remaining.isNotEmpty ? remaining.first.id : null);
+    if (newActive != null) {
+      await setActiveChurch(newActive);
+    } else {
+      await prefs.remove(_activeChurchKey);
+      TenantContext.clear();
+    }
+  }
+
   static Map<String, dynamic> _getAllChurchesMap() {
     final data = prefs.getString(_churchesKey);
     if (data == null) return {};
@@ -486,33 +529,29 @@ class LocalDb {
     await SessionManager.clearSession();
   }
 
-  // ── Branches ──────────────────────────────────────────────────────────────
+  // ── Branches (DEPRECATED — branches removed, all methods return empty) ────
+  // Branches have been removed from the app. All data is now tenant-scoped
+  // (church-level) only. These methods are kept as no-ops/empty returns
+  // for backward compatibility with code that hasn't been fully cleaned up.
 
   static Future<void> saveBranch(Branch branch) async {
-    final branches = getAllBranchesMap();
-    branches[branch.id] = branch.toMap();
-    await _saveBoxMap(HiveBoxes.branches, branches);
+    // No-op: branches removed
   }
 
   static Future<void> deleteBranch(String id) async {
-    final branches = getAllBranchesMap();
-    branches.remove(id);
-    await _saveBoxMap(HiveBoxes.branches, branches);
+    // No-op: branches removed
   }
 
   static Future<void> clearAllBranches() async {
-    await SecureStorageWrapper.removeSecureMap(TenantContext.tenantKey(HiveBoxes.branches)); _boxCache.remove(HiveBoxes.branches);
+    // No-op: branches removed
   }
 
   static Branch? getBranchById(String id) {
-    final branches = getAllBranchesMap();
-    final data = branches[id];
-    if (data == null) return null;
-    return Branch.fromMap(data as Map);
+    return null; // branches removed
   }
 
   static Map<String, dynamic> getAllBranchesMap() {
-    return _getBoxMap(HiveBoxes.branches);
+    return {}; // branches removed
   }
 
   static List<Branch> getAllBranches({
@@ -522,25 +561,7 @@ class LocalDb {
     String? districtId,
     String? areaId,
   }) {
-    final branchesMap = getAllBranchesMap();
-    var all = branchesMap.values.map((v) => Branch.fromMap(v as Map)).toList();
-    if (churchId != null) {
-      all = all.where((b) => b.churchId == churchId).toList();
-    }
-    if (organizationId != null) {
-      all = all.where((b) => b.organizationId == organizationId).toList();
-    }
-    if (regionId != null) {
-      all = all.where((b) => b.regionId == regionId).toList();
-    }
-    if (districtId != null) {
-      all = all.where((b) => b.districtId == districtId).toList();
-    }
-    if (areaId != null) {
-      all = all.where((b) => b.areaId == areaId).toList();
-    }
-    all.sort((a, b) => a.name.compareTo(b.name));
-    return all;
+    return []; // branches removed
   }
 
   // ── Departments ───────────────────────────────────────────────────────────

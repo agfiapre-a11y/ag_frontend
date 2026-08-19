@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/app_user.dart';
 import '../models/area.dart';
@@ -27,6 +28,10 @@ const _uuid = Uuid();
 class SeedMultiChurch {
   static const String defaultPassword = 'Password123';
 
+  // No local church templates — churches are created via the backend
+  // /tenants endpoint (by a super admin) or pulled from Supabase on login.
+  // Local seeding of churches caused conflicts with real Supabase tenants
+  // because the local UUID didn't match the Supabase tenant ID.
   static const List<({
     String name,
     String address,
@@ -34,54 +39,75 @@ class SeedMultiChurch {
     String email,
     String adminName,
     String adminEmail,
-  })> churchTemplates = [
-    (
-      name: 'Paradise AG',
-      address: 'Osu, Accra',
-      phone: '+233 30 123 4567',
-      email: 'info@paradiseag.org',
-      adminName: 'Super Admin',
-      adminEmail: 'admin@paradiseag.org',
-    ),
-    (
-      name: 'Grace Tabernacle AG',
-      address: 'Kumasi, Ashanti Region',
-      phone: '+233 32 234 5678',
-      email: 'info@gracetabernacle.org',
-      adminName: 'Grace Admin',
-      adminEmail: 'admin@gracetabernacle.org',
-    ),
-    (
-      name: 'Redeemed Souls AG',
-      address: 'Tamale, Northern Region',
-      phone: '+233 37 345 6789',
-      email: 'info@redeemedsouls.org',
-      adminName: 'Redeemed Admin',
-      adminEmail: 'admin@redeemedsouls.org',
-    ),
-    (
-      name: 'Living Waters AG',
-      address: 'Takoradi, Western Region',
-      phone: '+233 31 456 7890',
-      email: 'info@livingwatersag.org',
-      adminName: 'Living Waters Admin',
-      adminEmail: 'admin@livingwatersag.org',
-    ),
-    (
-      name: 'Mount Zion AG',
-      address: 'Cape Coast, Central Region',
-      phone: '+233 33 567 8901',
-      email: 'info@mountzionag.org',
-      adminName: 'Mount Zion Admin',
-      adminEmail: 'admin@mountzionag.org',
-    ),
-  ];
+  })> churchTemplates = [];
 
-  /// Seeds all 5 churches if they don't already exist.
+  /// Removes all locally-seeded churches that are not in [churchTemplates].
+  /// Called on every app startup (before the has_seeded check) to clean up
+  /// stale churches from previous seeding runs that conflict with real
+  /// Supabase tenants.
+  ///
+  /// With [churchTemplates] now empty, this deletes ALL locally-seeded
+  /// churches so the app relies on real Supabase tenants created via the
+  /// backend /tenants endpoint (or pulled on login).
+  static Future<void> cleanupStaleChurches() async {
+    final existing = LocalDb.getAllChurches();
+    if (existing.isEmpty) return;
+
+    final templateNames = churchTemplates.map((t) => t.name).toSet();
+
+    // Find a fallback church (one that IS in the templates) to switch to
+    // after deleting stale ones.
+    String? fallbackId;
+    for (final church in existing) {
+      if (templateNames.contains(church.name)) {
+        fallbackId = church.id;
+        break;
+      }
+    }
+
+    for (final church in existing) {
+      if (!templateNames.contains(church.name)) {
+        debugPrint('[cleanupStaleChurches] Removing stale local church: '
+            '${church.name} (${church.id})');
+        await LocalDb.deleteChurchData(church.id, fallbackChurchId: fallbackId);
+      }
+    }
+  }
+
+  /// Seeds the church(es) defined in [churchTemplates] if they don't
+  /// already exist. Also cleans up any churches from previous seeding
+  /// runs that are no longer in [churchTemplates].
   /// Returns the list of created church IDs.
   static Future<List<String>> seedAllChurches() async {
     final existing = LocalDb.getAllChurches();
-    final existingNames = existing.map((c) => c.name).toSet();
+    var existingNames = existing.map((c) => c.name).toSet();
+    final templateNames = churchTemplates.map((t) => t.name).toSet();
+
+    // Clean up churches from previous seeding that are no longer in
+    // the templates list (e.g. when churches were removed from the list).
+    // Keep the first template church as fallback for active church.
+    final fallbackName = churchTemplates.isNotEmpty
+        ? churchTemplates.first.name
+        : null;
+    String? fallbackId;
+    for (final church in existing) {
+      if (!templateNames.contains(church.name)) {
+        // Find the fallback church ID (Paradise AG) before deleting
+        if (fallbackId == null && church.name == fallbackName) {
+          fallbackId = church.id;
+          continue;
+        }
+        debugPrint('[seedAllChurches] Removing stale church: ${church.name}');
+        await LocalDb.deleteChurchData(church.id, fallbackChurchId: fallbackId);
+      } else if (fallbackId == null && church.name == fallbackName) {
+        fallbackId = church.id;
+      }
+    }
+
+    // Reload existing after cleanup
+    existing.clear();
+    existing.addAll(LocalDb.getAllChurches());
+    existingNames = existing.map((c) => c.name).toSet();
 
     final createdIds = <String>[];
 
