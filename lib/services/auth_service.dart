@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/app_user.dart';
 import '../models/church.dart';
@@ -17,6 +18,7 @@ import 'api_client.dart';
 import 'remote_auth_service.dart';
 import 'auth_token_manager.dart';
 import 'supabase_config.dart';
+import 'sync_service.dart';
 import '../core/role_dashboard_catalog.dart';
 
 class AuthService {
@@ -465,15 +467,26 @@ class AuthService {
       }
     }
 
-    // Register on backend when API is configured
+    // Register on backend when API is configured (best-effort).
+    // If the backend is unreachable or the JWT is missing/expired (401),
+    // we still save the user locally and enqueue a sync so the app
+    // remains functional offline. The sync service will push to Supabase.
     if (ApiConfig.isConfigured && churchId.isNotEmpty) {
-      await RemoteAuthService.registerUser(
-        name: name,
-        email: email,
-        password: password,
-        role: role,
-        tenantId: churchId,
-      );
+      try {
+        await RemoteAuthService.registerUser(
+          name: name,
+          email: email,
+          password: password,
+          role: role,
+          tenantId: churchId,
+        );
+      } catch (e) {
+        // Backend registration failed — continue with local-only save.
+        // Common causes: backend cold start (timeout), expired JWT (401),
+        // or local-fallback login (no token was ever issued).
+        debugPrint('[registerUser] backend onboarding failed, '
+            'continuing with local-only save: $e');
+      }
     }
 
     final movement = MovementClassifier.classify(
@@ -505,6 +518,16 @@ class AuthService {
       createdAt: DateTime.now(),
     );
     await LocalDb.saveUser(user);
+
+    // Enqueue a sync so the user is pushed to Supabase when online.
+    // This covers the case where backend onboarding was skipped/failed.
+    await SyncService.enqueueChange(
+      boxKey: HiveBoxes.users,
+      recordId: user.id,
+      operation: 'upsert',
+      data: user.toMap(),
+    );
+
     return user;
   }
 }

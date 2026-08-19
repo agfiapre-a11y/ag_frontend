@@ -38,4 +38,22 @@ class AuthTokenManager {
     final data = await SecureStorageWrapper.getSecureMap(_tokenKey);
     return data?['accessToken'] as String?;
   }
+
+  static Future<String?> getRefreshToken() async {
+    final data = await SecureStorageWrapper.getSecureMap(_tokenKey);
+    return data?['refreshToken'] as String?;
+  }
+
+  /// Updates only the access token (after a successful refresh).
+  /// Keeps the existing refresh token and tenantId.
+  static Future<void> updateAccessToken(String accessToken) async {
+    final data = await SecureStorageWrapper.getSecureMap(_tokenKey);
+    if (data == null) return;
+    data['accessToken'] = accessToken;
+    await SecureStorageWrapper.setSecureMap(_tokenKey, data);
+    ApiClient().setAuth(
+      token: accessToken,
+      tenantId: data['tenantId'] as String?,
+    );
+  }
 }

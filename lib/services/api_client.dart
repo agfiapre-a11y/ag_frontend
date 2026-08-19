@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
+import 'secure_storage_wrapper.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -23,8 +24,14 @@ class ApiClient {
   /// Shorter timeout for auth requests (login, register).
   static const authTimeout = Duration(seconds: 15);
 
+  /// Storage key for persisted auth tokens (must match AuthTokenManager).
+  static const _tokenKey = 'auth_tokens';
+
   String? _token;
   String? _tenantId;
+
+  /// Guards against infinite refresh loops.
+  bool _isRefreshing = false;
 
   void setAuth({String? token, String? tenantId}) {
     _token = token;
@@ -47,6 +54,28 @@ class ApiClient {
       throw StateError('API_BASE_URL is not configured');
     }
 
+    final response = await _doRequest(method, path, body, extraHeaders, timeout);
+
+    // On 401, try to refresh the token and retry once.
+    if (response.statusCode == 401 && !_isRefreshing) {
+      final refreshed = await _tryRefreshToken();
+      if (refreshed) {
+        final retry = await _doRequest(method, path, body, extraHeaders, timeout);
+        return _handleResponse(retry);
+      }
+    }
+
+    return _handleResponse(response);
+  }
+
+  /// Executes a single HTTP request and returns the raw response.
+  Future<http.Response> _doRequest(
+    String method,
+    String path,
+    Map<String, dynamic>? body,
+    Map<String, String>? extraHeaders,
+    Duration? timeout,
+  ) async {
     final effectiveTimeout = timeout ?? defaultTimeout;
     final uri = Uri.parse('${ApiConfig.baseUrl}$path');
     final headers = <String, String>{
@@ -60,46 +89,73 @@ class ApiClient {
       headers['X-Tenant-Id'] = _tenantId!;
     }
 
-    late final http.Response response;
+    final encodedBody = body == null ? null : jsonEncode(body);
+
     switch (method.toUpperCase()) {
       case 'GET':
-        response = await http.get(uri, headers: headers).timeout(effectiveTimeout);
-        break;
+        return http.get(uri, headers: headers).timeout(effectiveTimeout);
       case 'POST':
-        response = await http.post(
-          uri,
-          headers: headers,
-          body: body == null ? null : jsonEncode(body),
-        ).timeout(effectiveTimeout);
-        break;
+        return http.post(uri, headers: headers, body: encodedBody)
+            .timeout(effectiveTimeout);
       case 'PUT':
-        response = await http.put(
-          uri,
-          headers: headers,
-          body: body == null ? null : jsonEncode(body),
-        ).timeout(effectiveTimeout);
-        break;
+        return http.put(uri, headers: headers, body: encodedBody)
+            .timeout(effectiveTimeout);
       case 'PATCH':
-        response = await http.patch(
-          uri,
-          headers: headers,
-          body: body == null ? null : jsonEncode(body),
-        ).timeout(effectiveTimeout);
-        break;
+        return http.patch(uri, headers: headers, body: encodedBody)
+            .timeout(effectiveTimeout);
       case 'DELETE':
-        response = await http.delete(uri, headers: headers).timeout(effectiveTimeout);
-        break;
+        return http.delete(uri, headers: headers).timeout(effectiveTimeout);
       default:
         throw UnsupportedError('HTTP method $method not supported');
     }
+  }
 
+  /// Handles a completed response: returns decoded JSON on 2xx, throws on error.
+  Map<String, dynamic> _handleResponse(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return {};
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
+    throw ApiException(response.statusCode, _parseError(response));
+  }
 
-    final error = _parseError(response);
-    throw ApiException(response.statusCode, error);
+  /// Attempts to refresh the access token using the stored refresh token.
+  /// Returns true on success, false on failure.
+  /// Sets `_isRefreshing` to prevent recursive refresh loops.
+  Future<bool> _tryRefreshToken() async {
+    if (_isRefreshing) return false;
+    _isRefreshing = true;
+    try {
+      final data = await SecureStorageWrapper.getSecureMap(_tokenKey);
+      if (data == null) return false;
+      final refreshToken = data['refreshToken'] as String?;
+      if (refreshToken == null || refreshToken.isEmpty) return false;
+
+      final uri = Uri.parse('${ApiConfig.baseUrl}/auth/refresh');
+      final refreshResp = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $refreshToken',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (refreshResp.statusCode != 200) return false;
+
+      final decoded = jsonDecode(refreshResp.body) as Map<String, dynamic>;
+      final newAccessToken = decoded['accessToken'] as String?;
+      if (newAccessToken == null) return false;
+
+      // Update in-memory state and persisted storage.
+      _token = newAccessToken;
+      data['accessToken'] = newAccessToken;
+      await SecureStorageWrapper.setSecureMap(_tokenKey, data);
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      _isRefreshing = false;
+    }
   }
 
   Future<Map<String, dynamic>> get(String path) => request('GET', path);
@@ -108,17 +164,21 @@ class ApiClient {
     if (!ApiConfig.isConfigured) {
       throw StateError('API_BASE_URL is not configured');
     }
-    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
-    if (_token != null) {
-      headers['Authorization'] = 'Bearer $_token';
+    final response = await _doRequest('GET', path, null, null, null);
+
+    // On 401, try refresh and retry.
+    if (response.statusCode == 401 && !_isRefreshing) {
+      final refreshed = await _tryRefreshToken();
+      if (refreshed) {
+        final retry = await _doRequest('GET', path, null, null, null);
+        return _handleListResponse(retry);
+      }
     }
-    if (_tenantId != null) {
-      headers['X-Tenant-Id'] = _tenantId!;
-    }
-    final response = await http.get(uri, headers: headers).timeout(defaultTimeout);
+
+    return _handleListResponse(response);
+  }
+
+  List<dynamic> _handleListResponse(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return [];
       final decoded = jsonDecode(response.body);
