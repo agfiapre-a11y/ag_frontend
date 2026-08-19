@@ -119,6 +119,28 @@ class SyncService {
   static Map<String, dynamic> keysFromDb(Map<String, dynamic> map) =>
       _keysFromDb(map);
 
+  /// Builds an upsert payload with the correct tenant column for a table.
+  /// [desiredTenantCol] is one of 'tenant_id', 'church_id', or null (strip).
+  /// The input [dbData] is assumed to have been produced by _keysToDb,
+  /// so it may contain a `tenant_id` key. This helper renames or removes
+  /// it to match the target table's actual schema.
+  static Map<String, dynamic> _buildUpsertPayload(
+    Map<String, dynamic> dbData,
+    String? desiredTenantCol,
+  ) {
+    final payload = Map<String, dynamic>.from(dbData);
+    final tenantValue = payload['tenant_id'] ?? payload['church_id'];
+
+    // Remove both possible tenant columns; re-add the desired one.
+    payload.remove('tenant_id');
+    payload.remove('church_id');
+
+    if (desiredTenantCol != null && tenantValue != null) {
+      payload[desiredTenantCol] = tenantValue;
+    }
+    return payload;
+  }
+
   /// Global tables that have no tenant-scoping column.
   static const _globalTables = {
     'tenants',
@@ -262,9 +284,42 @@ class SyncService {
           // before pushing to cloud (UK GDPR Art. 5(1)(f))
           final syncData = Map<String, dynamic>.from(entry.data);
           syncData.remove('passwordHash');
-          // Convert camelCase keys to snake_case for the database
+          // Convert camelCase keys to snake_case for the database.
+          // _keysToDb maps churchId → tenant_id by default.
           final dbData = _keysToDb(syncData);
-          await client.from(tableName).upsert(dbData, onConflict: 'id');
+
+          // The DB schema is inconsistent: migration-created tables use
+          // `tenant_id`, NestJS/TypeORM-created tables use `church_id`.
+          // Try tenant_id first, then church_id, then strip the tenant
+          // column entirely, retrying only on column-mismatch (400/42703).
+          final isGlobal = _globalTables.contains(tableName);
+          final tenantCols = isGlobal
+              ? <String?>[null]
+              : <String?>['tenant_id', 'church_id', null];
+
+          Object? lastError;
+          bool succeeded = false;
+          for (final col in tenantCols) {
+            try {
+              final payload = _buildUpsertPayload(dbData, col);
+              await client
+                  .from(tableName)
+                  .upsert(payload, onConflict: 'id');
+              succeeded = true;
+              break;
+            } catch (e) {
+              lastError = e;
+              final str = e.toString();
+              final isColumnError = str.contains('42703') ||
+                  str.contains('does not exist') ||
+                  str.contains('Could not find column') ||
+                  str.contains('400');
+              if (!isColumnError) break;
+            }
+          }
+          if (!succeeded) {
+            throw lastError ?? Exception('upsert failed for $tableName');
+          }
         }
 
         await LocalDb.removeFromSyncQueue(entry.id);
