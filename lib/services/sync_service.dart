@@ -257,6 +257,29 @@ class SyncService {
 
   // ── Push (local → cloud) ──────────────────────────────────────────────────
 
+  /// Maximum number of push attempts before an entry is quarantined
+  /// (removed from the active queue) to stop it from being retried forever.
+  static const _maxPushAttempts = 8;
+
+  /// Base delay for exponential backoff between retry attempts.
+  /// Effective delay = _backoffBase * 2^(attempts - 1), capped at 1 hour.
+  static const _backoffBase = Duration(seconds: 30);
+
+  /// Whether a sync queue entry is due for another push attempt, based on
+  /// its attempt count and the time of its last attempt (exponential
+  /// backoff). Entries with 0 attempts are always due.
+  static bool _isDueForRetry(SyncQueueEntry entry) {
+    if (entry.attempts == 0) return true;
+    final backoffMultiplier = 1 << (entry.attempts - 1).clamp(0, 6); // cap 2^6
+    final delay = _backoffBase * backoffMultiplier;
+    final cappedDelay = delay > const Duration(hours: 1)
+        ? const Duration(hours: 1)
+        : delay;
+    return DateTime.now().isAfter(entry.createdAt.add(cappedDelay)) &&
+        (entry.lastRetryAt == null ||
+            DateTime.now().isAfter(entry.lastRetryAt!.add(cappedDelay)));
+  }
+
   /// Pushes all pending local changes to Supabase.
   static Future<int> pushLocalChanges() async {
     if (!SupabaseConfig.isConfigured) return 0;
@@ -272,6 +295,18 @@ class SyncService {
     for (final entry in queue) {
       final tableName = _tableMap[entry.tableName];
       if (tableName == null) {
+        await LocalDb.removeFromSyncQueue(entry.id);
+        continue;
+      }
+
+      // Respect exponential backoff — skip entries not yet due for retry.
+      if (!_isDueForRetry(entry)) continue;
+
+      // Quarantine entries that have exhausted their retry budget so they
+      // stop being retried forever and flooding the console/network.
+      if (entry.attempts >= _maxPushAttempts) {
+        debugPrint('[pushLocalChanges] Quarantining $tableName/${entry.recordId} '
+            'after ${entry.attempts} failed attempts: ${entry.lastError}');
         await LocalDb.removeFromSyncQueue(entry.id);
         continue;
       }
@@ -325,10 +360,16 @@ class SyncService {
         await LocalDb.removeFromSyncQueue(entry.id);
         pushed++;
       } catch (e) {
+        // Log the real error so we can diagnose schema/data issues instead
+        // of only seeing a generic "400 Bad Request" in the network tab.
+        debugPrint('[pushLocalChanges] Failed to push $tableName/'
+            '${entry.recordId} (attempt ${entry.attempts + 1}/'
+            '$_maxPushAttempts): $e');
         await LocalDb.updateSyncQueueEntry(
           entry.copyWith(
             attempts: entry.attempts + 1,
             lastError: e.toString(),
+            lastRetryAt: DateTime.now(),
           ),
         );
       }

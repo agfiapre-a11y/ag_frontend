@@ -8,6 +8,7 @@ class SyncQueueEntry {
   final DateTime createdAt;
   final int attempts;
   final String? lastError;
+  final DateTime? lastRetryAt;
 
   static const opInsert = 'insert';
   static const opUpdate = 'update';
@@ -23,6 +24,7 @@ class SyncQueueEntry {
     required this.createdAt,
     this.attempts = 0,
     this.lastError,
+    this.lastRetryAt,
   });
 
   Map<String, dynamic> toMap() => {
@@ -34,6 +36,7 @@ class SyncQueueEntry {
         'createdAt': createdAt.toIso8601String(),
         'attempts': attempts,
         'lastError': lastError,
+        'lastRetryAt': lastRetryAt?.toIso8601String(),
       };
 
   factory SyncQueueEntry.fromMap(Map<dynamic, dynamic> map) => SyncQueueEntry(
@@ -45,11 +48,15 @@ class SyncQueueEntry {
         createdAt: DateTime.parse(map['createdAt'] as String),
         attempts: (map['attempts'] as num?)?.toInt() ?? 0,
         lastError: map['lastError'] as String?,
+        lastRetryAt: map['lastRetryAt'] != null
+            ? DateTime.parse(map['lastRetryAt'] as String)
+            : null,
       );
 
   SyncQueueEntry copyWith({
     int? attempts,
     String? lastError,
+    DateTime? lastRetryAt,
   }) =>
       SyncQueueEntry(
         id: id,
@@ -60,6 +67,7 @@ class SyncQueueEntry {
         createdAt: createdAt,
         attempts: attempts ?? this.attempts,
         lastError: lastError ?? this.lastError,
+        lastRetryAt: lastRetryAt ?? this.lastRetryAt,
       );
 }
 
